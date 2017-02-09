@@ -33,6 +33,9 @@ importFrom("mnormt",
 importFrom("pbivnorm",
            "pbivnorm")
 
+importFrom("Rsolnp",
+           "solnp")
+
 # AIC and friends...
 if(getRversion() >= "2.13.0") {
     importFrom("stats4",AIC, BIC, logLik, nobs)
@@ -80,6 +83,7 @@ export("lavaan", "cfa", "sem", "growth",
        #"lavData",
        "lavPredict",
        "lavCor",
+       "lci",
 
        # API functions
 
