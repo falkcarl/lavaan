@@ -13,9 +13,6 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   ## input checking
   if(!is.null(start)){
     stop("Custom starting values not yet supported")
-    if(length(start)!=1){
-      stop("start should have a length of 1")
-    }
   }
   if(reoptimize){
     stop("Re-optimization is not yet supported")
@@ -23,8 +20,11 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   if(class(object)!="lavaan"){
     stop("object must be a fitted lavaan model")
   }
-  if(level <0 | level >1){
+  if(level <=0 | level >=1){
     stop("level must be between 0 and 1")
+  }
+  if(ci.method=="bisect" & object@Options$se=="none"){
+    stop("Bisection method currently relies in part on standard errors to aid in determining where to start the algorithm. Change se='none' to something else.")
   }
   
   ## extract parameter table
@@ -35,10 +35,12 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   
   if(length(pindx)<1){
     stop("Parameter label not found in lavaan parameter table.")
+  } else if(length(pindx)>1){
+    warning("FIXME: More than one parameter label match")
   }
   
   ## point estimate based on fitted model
-  est<-ptable$est[pindx]
+  est<-ptable$est[pindx[1]]
   ptable$ustart<-ptable$start<-ptable$est#+rnorm(1,0,.01)
   if(is.null(start)){
     start<-est
@@ -153,10 +155,10 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
         utils::capture.output(LCI<-try(Rsolnp::solnp(start,fitfunc,fitmodel=object,
                       label=label, pindx=pindx, crit=crit, bound=b,
                       diff.method=diff.method)))
-        
+
         if(class(LCI)!="try-error"){
           D<-lci_diff_test(LCI$pars,object,label,diff.method="default")
-          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx]
+          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL
           conv<-LCI$convergence
         } else{
@@ -168,7 +170,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
                       diff.method=diff.method,method="BFGS"))
         if(class(LCI)!="try-error"){
           D<-lci_diff_test(LCI$par,object,label,diff.method="default")
-          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx]
+          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL          
           conv<-LCI$convergence
         } else{
@@ -180,7 +182,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
                       diff.method=diff.method))
         if(class(LCI)!="try-error"){
           D<-lci_diff_test(LCI$par,object,label,diff.method="default")
-          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx]
+          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL
           conv<-LCI$convergence
         } else{
@@ -195,7 +197,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
 
       if(class(LCI)!="try-error"){
         D<-lci_diff_test(LCI$pars,object,label,diff.method="default")
-        est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx]
+        est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
         attr(D,"mod")<-NULL
         conv<-LCI$convergence
       } else{
@@ -272,7 +274,7 @@ lci_nealemiller1997<-function(p, fitmodel, label, pindx, crit, bound=c("lower","
     fit<-(D-crit)^2
   
     # just in case this is a function of parameters
-    p<-parameterEstimates(attr(D,"mod"))$est[pindx]
+    p<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
   
     if(bound=="lower"){
       fit<-fit+p
@@ -302,13 +304,13 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
   }
   
   ## point estimate based on fitted model
-  est<-ptable$est[pindx]
+  est<-ptable$est[pindx[1]]
   if(is.null(start)){
     start<-est
   }
   
   ## standard error
-  se<-ptable$se[pindx]
+  se<-ptable$se[pindx[1]]
   
   ## First part - find out two points - between which is the boundary
   # starting points are function of point estimate and multiplier w/ se  
