@@ -219,7 +219,7 @@ lavTestScore <- function(object, add = NULL, release = NULL,
         # create epc table for the 'free' parameters
         LIST <- parTable(object)
         LIST <- LIST[,c("lhs","op","rhs","group","free","label","plabel")]
-        if(max(LIST$group) == 1L) {
+        if(lav_partable_ngroups(LIST) == 1L) {
             LIST$group <- NULL
         }
         nonpar.idx <- which(LIST$op %in% c("==", ":=", "<", ">"))
@@ -227,7 +227,7 @@ lavTestScore <- function(object, add = NULL, release = NULL,
             LIST <- LIST[-nonpar.idx,]
         }
 
-        LIST$est[ LIST$free > 0 ] <- coef(object)
+        LIST$est[ LIST$free > 0 ] <- lav_object_inspect_coef(object, type = "free")
         LIST$epc <- rep(as.numeric(NA), length(LIST$lhs))
         LIST$epc[ LIST$free > 0 ] <- EPC.all
         LIST$epv <- LIST$est + LIST$epc

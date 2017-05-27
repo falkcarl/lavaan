@@ -885,7 +885,9 @@ lav_matrix_crossprod <- function(A, B) {
     if(missing(B)) {
         B <- A
     }
-    apply(A, 2L, function(x) colSums(B * x, na.rm=TRUE))
+    out <- apply(A, 2L, function(x) colSums(B * x, na.rm=TRUE))
+
+    as.matrix(out)
 }
 
 
@@ -988,7 +990,28 @@ lav_matrix_orthogonal_complement2 <- function(A,
 lav_matrix_symmetric_inverse <- function(S, logdet = FALSE, 
                                          Sinv.method = "eigen") {
 
-    if(Sinv.method == "eigen") {
+    P <- NCOL(S)
+
+    if(P == 0L) {
+        S.inv <- matrix(0,0,0)
+        if(logdet) {
+            attr(S.inv, "logdet") <- 0
+        }
+        return(S.inv)
+    } else if(P == 1L) {
+        tmp <- S[1,1]
+        S.inv <- matrix(1/tmp, 1, 1)
+        if(logdet) {
+            attr(S.inv, "logdet") <- log(tmp)
+        }
+    } else if(P == 2L) {
+        a11 <- S[1,1]; a12 <- S[1,2]; a21 <- S[2,1]; a22 <- S[2,2]
+        tmp <- a11*a22 - a12*a21
+        S.inv <- matrix(c(a22/tmp, -a21/tmp, -a12/tmp, a11/tmp), 2, 2)
+        if(logdet) {
+            attr(S.inv, "logdet") <- log(tmp)
+        }
+    } else if(Sinv.method == "eigen") {
         EV <- eigen(S, symmetric = TRUE)
         # V %*% diag(1/d) %*% V^{-1}, where V^{-1} = V^T
         S.inv <- tcrossprod(sweep(EV$vector, 2L, 
@@ -1194,3 +1217,26 @@ lav_matrix_symmetric_logdet_update <- function(S.logdet, S.inv,
     out
 }
 
+# force a symmetric matrix to be positive definite
+# simple textbook version (see Matrix::nearPD for a more sophisticated version)
+#
+lav_matrix_symmetric_force_pd <- function(S, tol = 1e-06) {
+
+    if(ncol(S) == 1L) {
+        return(matrix(max(S[1,1], tol), 1L, 1L))
+    }
+
+    # eigen decomposition
+    S.eigen <- eigen(S, symmetric = TRUE)
+   
+    # eigen values
+    ev <- S.eigen$values
+
+    # replace small/negative eigen values
+    ev[ev < tol] <- tol*abs(ev[1])
+
+    # reconstruct
+    out <- S.eigen$vectors %*% diag(ev) %*% t(S.eigen$vectors)
+
+    out
+}

@@ -18,7 +18,7 @@ lavTech(object, what = "free", add.labels = FALSE, add.class = FALSE,
         list.by.group = FALSE,
         drop.list.single.group = FALSE)
 
-inspect(object, what = "free")
+inspect(object, what = "free", ...)
 }
 \arguments{
 \item{object}{An object of class \code{\linkS4class{lavaan}}.}
@@ -39,6 +39,7 @@ names for multiple groups.}
     a list, where each element corresponds to a group (even if there is only
     a single group.) If \code{TRUE}, the list will be unlisted if there is
     only a single group.}
+\item{...}{Additional arguments. Not used by lavaan, but by other packages.}
 }
 \details{
 The \code{lavInspect()} and \code{lavTech()} functions only differ in the way
@@ -73,8 +74,7 @@ Model matrices:
         Alias: \code{"starting.values"}.}
     \item{\code{"est"}:}{A list of model matrices. The values represent
         the estimated model parameters. Aliases:
-        \code{"estimates"}, \code{"coef"}, \code{"coefficients"} and
-        \code{"x"}.}
+        \code{"estimates"}, and \code{"x"}.}
     \item{\code{"dx.free"}:}{A list of model matrices. The values represent
         the gradient (first derivative) values of the model parameters.
         If two parameters are constrained to be equal, they will have the
@@ -215,6 +215,8 @@ Optimizer information:
         optimizer.}
     \item{\code{"optim"}:}{List. All available information regarding the
         optimization results.}
+    \item{\code{"npar"}:}{Integer. Number of free parameters (ignoring constraints).}
+    \item{\code{"coef"}:}{Numeric. The estimated parameter vector.}
 }
 
 Gradient, Hessian, observed, expected and first.order information matrices:

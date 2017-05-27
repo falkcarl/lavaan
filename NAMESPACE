@@ -1,25 +1,26 @@
 # only when we have src code
 # useDynLib("lavaan")
 
-importFrom("graphics", 
+importFrom("graphics",
            "abline", "axis", "box", "hist", "pairs", "par",
            # generics
            "plot")
 
-importFrom("methods", 
+importFrom("methods",
            "is", "new", "slot", "slotNames",
            # generics,
 
            "show")
-importFrom("stats", "as.formula", "complete.cases", "cor", "cov", "cov2cor",
-           "dnorm", "lm.fit", "na.omit", "nlminb", "optim", "pchisq", 
-           "plogis", "pnorm", "qchisq", "qnorm", "quantile", "rnorm", "runif", 
-           "sd", "terms", "uniroot", "var", "weighted.mean",
+importFrom("stats", 
+           "as.formula", "complete.cases", "cor", "cov", "cov2cor",
+           "dnorm", "lm.fit", "na.omit", "nlminb", "optim", "pchisq",
+           "plogis", "pnorm", "qchisq", "qnorm", "quantile", "rnorm", "runif",
+           "sd", "terms", "uniroot", "var", "weighted.mean", "aggregate",
            # generics
            "coef", "residuals", "resid", "fitted.values", "fitted",
            "predict", "update", "anova", "vcov")
 
-importFrom("utils", 
+importFrom("utils",
            "combn", "modifyList", "packageDescription", "read.table",
            "str", "write.table")
 
@@ -72,7 +73,7 @@ export("lavaan", "cfa", "sem", "growth",
        "bootstrapLavaan", "bootstrapLRT", "InformativeTesting",
        "simulateData",
        "estfun.lavaan", "lavScores",
-       "lavTables", 
+       "lavTables",
        "lavTablesFitCp", "lavTablesFitCf", "lavTablesFitCm",
        "lavExport",
        "lavTestLRT", "lavTestWald", "lavTestScore",
@@ -124,7 +125,7 @@ export("lavaan", "cfa", "sem", "growth",
        "lav_matrix_orthogonal_complement",
        "lav_matrix_bdiag",
        "lav_matrix_trace",
- 
+
        # lav_partable
        "lav_partable_independence",   # used by semTools!
        "lav_partable_unrestricted",
@@ -142,7 +143,7 @@ export("lavaan", "cfa", "sem", "growth",
 
        # lav_constraints
        "lav_constraints_parse",
-       
+
        # lav_func
        "lav_func_gradient_complex",
        "lav_func_gradient_simple",
@@ -163,18 +164,18 @@ export("lavaan", "cfa", "sem", "growth",
 
 # export Classes
 exportClasses(
-              "lavaan" #,
-              #"lavData"
+              "lavaan",
+              "lavaanList" 
              )
 
 # export Methods
 exportMethods(
-              "predict", 
+              "predict",
               "update",
               "anova",
               "coef",
               "residuals", "resid",
-              "vcov", 
+              "vcov",
               "logLik",
               "fitted.values", "fitted",
               "summary"
@@ -187,6 +188,8 @@ S3method(print, lavaan.matrix.symmetric)
 S3method(print, lavaan.vector)
 S3method(print, lavaan.parameterEstimates)
 S3method(print, prelav)
+S3method(print, lavaan.fsr)
+S3method(summary, lavaan.fsr)
 S3method(pairs, lavaan)
 S3method(print, InformativeTesting)
 S3method(plot, InformativeTesting)

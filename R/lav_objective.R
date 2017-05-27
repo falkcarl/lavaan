@@ -620,3 +620,35 @@ estimator.MML <- function(lavmodel      = NULL,
     fx
 }
 
+estimator.2L <- function(lavmodel       = NULL,
+                         GLIST          = NULL,
+                         Lp             = NULL,
+                         lavsamplestats = NULL,
+                         group          = 1L) {
+
+    YLp <- lavsamplestats@YLp[[group]]
+
+    # compute model-implied statistics for all blocks
+    implied <- lav_model_implied(lavmodel, GLIST = GLIST)
+    
+    # here, we assume only 2 levels, at [[1]] and [[2]]
+    stopifnot(lavsamplestats@ngroups == 1L)
+    Sigma.W <- implied$cov[[1]]
+    Mu.W    <- implied$mean[[1]]
+    Sigma.B <- implied$cov[[2]]
+    Mu.B    <- implied$mean[[2]]
+
+    loglik <- lav_mvnorm_cluster_loglik_samplestats_2l(YLp = YLp, Lp = Lp,
+                  Mu.W = Mu.W, Sigma.W = Sigma.W, 
+                  Mu.B = Mu.B, Sigma.B = Sigma.B,
+                  log2pi = FALSE, minus.two = TRUE)
+
+    # minimize
+    objective <- 1 * loglik
+
+    # divide by (N*2)
+    objective <- objective / (lavsamplestats@ntotal * 2)
+
+    objective
+}
+

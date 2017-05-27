@@ -13,8 +13,8 @@
 \description{Utility functions related to the parameter table (partable)}
 \usage{
 # extract information from a parameter table
-lav_partable_df(partable, group = NULL)
-lav_partable_ndat(partable, group = NULL)
+lav_partable_df(partable)
+lav_partable_ndat(partable)
 lav_partable_npar(partable)
 lav_partable_attributes(partable, pta = NULL)
 
@@ -23,15 +23,18 @@ lav_partable_labels(partable, blocks = "group", group.equal = "",
                     group.partial = "", type = "user")
 
 # generate parameter table for specific models
-lav_partable_independence(lavobject = NULL, lavdata = NULL, lavoptions = NULL, 
-    lavsamplestats = NULL, sample.cov = NULL, sample.mean = NULL, 
-    sample.th = NULL, sample.th.idx = NULL)
+lav_partable_independence(lavobject = NULL, lavdata = NULL, 
+    lavoptions = NULL, lavsamplestats = NULL, sample.cov = NULL, 
+    sample.mean = NULL, sample.th = NULL, sample.th.idx = NULL,
+    sample.cov.x = NULL, sample.mean.x = NULL)
 
-lav_partable_unrestricted(lavobject = NULL, lavdata = NULL, lavoptions = NULL, 
-    lavsamplestats = NULL, sample.cov = NULL, sample.mean = NULL, 
-    sample.slopes = NULL, sample.th = NULL, sample.th.idx = NULL)
+lav_partable_unrestricted(lavobject = NULL, lavdata = NULL, 
+    lavpta = NULL, lavoptions = NULL, lavsamplestats = NULL, 
+    sample.cov = NULL, sample.mean = NULL, sample.slopes = NULL, 
+    sample.th = NULL, sample.th.idx = NULL) 
 
-lav_partable_from_lm(object, est = FALSE, label = FALSE, as.data.frame. = FALSE)
+lav_partable_from_lm(object, est = FALSE, label = FALSE, 
+    as.data.frame. = FALSE)
 
 # complete a parameter table only containing a few columns (lhs,op,rhs)
 lav_partable_complete(partable = NULL, start = TRUE)
@@ -43,7 +46,6 @@ lav_partable_merge(pt1 = NULL, pt2 = NULL, remove.duplicated = FALSE,
 \arguments{
 \item{partable}{A parameter table. see \code{\link{lavParTable}} 
 for more information.}
-\item{group}{Integer. If non-null, only consider this group.}
 \item{blocks}{Character vector. Which columns in the parameter table should be
   taken to distinguish between different blocks/groups of parameters (and hence
   be given different labels)?}
@@ -60,6 +62,7 @@ are extracted from this object.}
 \item{lavoptions}{A names list. The Options lsot from a lavaan object.}
 \item{lavsamplestats}{An object of class `lavSampleStats'. The SampleStats
 slot from a  lavaan object.}
+\item{lavpta}{The pta (parameter table attributes) slot from a lavaan object.}
 \item{sample.cov}{Optional list of numeric matrices. 
 Each list element contains a sample variance-covariance matrix for this group.
 If provided, these values will be used as starting values.}
@@ -76,6 +79,14 @@ If provided (and also sample.th.idx is provided),
 these values will be used as starting values.}
 \item{sample.th.idx}{Optional list of integers. Each list contains the
 threshold indices for this group.}
+\item{sample.cov.x}{Optional list of numeric matrices.  Each list element
+contains a sample variance-covariance matrix for the exogenous variables
+for this group (only used when \code{conditional.x = TRUE}).  If provided,
+these values will be used as starting values.}
+\item{sample.mean.x}{Optional list of numeric vectors.
+Each list element contains a sample mean vector for the exogenous variables
+for this group (only used when \code{conditional.x = TRUE}).
+If provided, these values will be used as starting values.}
 \item{est}{Logical. If TRUE, include the fitted estimates in the parameter table.}
 \item{label}{Logical. If TRUE, include parameter labels in the parameter table.}
 \item{as.data.frame.}{Logical. If TRUE, return the parameter table as a data.frame.}

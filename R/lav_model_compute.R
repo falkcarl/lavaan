@@ -6,13 +6,13 @@ computeSigmaHat <- function(lavmodel = NULL, GLIST = NULL, extra = FALSE,
 
     nmat           <- lavmodel@nmat
     nvar           <- lavmodel@nvar
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     representation <- lavmodel@representation
 
     # return a list
-    Sigma.hat <- vector("list", length=ngroups)
+    Sigma.hat <- vector("list", length=nblocks)
 
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
 
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
@@ -46,7 +46,7 @@ computeSigmaHat <- function(lavmodel = NULL, GLIST = NULL, extra = FALSE,
                 attr(Sigma.hat[[g]], "log.det") <- Sigma.hat.log.det
             }
         }
-    } # ngroups
+    } # nblocks
 
     Sigma.hat
 }
@@ -61,7 +61,6 @@ computeSigmaHat <- function(lavmodel = NULL, GLIST = NULL, extra = FALSE,
 ##     S21 = cov.x %*% t(PI)
 ##     S22 = cov.x
 computeSigmaHatJoint <- function(lavmodel = NULL, GLIST = NULL, extra = FALSE,
-                                 lavsamplestats = NULL,
                                  delta = TRUE, debug = FALSE) {
 
     stopifnot(lavmodel@conditional.x)
@@ -71,13 +70,13 @@ computeSigmaHatJoint <- function(lavmodel = NULL, GLIST = NULL, extra = FALSE,
 
     nmat           <- lavmodel@nmat
     nvar           <- lavmodel@nvar
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     representation <- lavmodel@representation
 
     # return a list
-    Sigma.hat <- vector("list", length=ngroups)
+    Sigma.hat <- vector("list", length=nblocks)
 
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
 
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
@@ -87,7 +86,7 @@ computeSigmaHatJoint <- function(lavmodel = NULL, GLIST = NULL, extra = FALSE,
             res.Sigma  <- computeSigmaHat.LISREL(MLIST = MLIST, delta = delta)
             res.int    <- computeMuHat.LISREL(MLIST = MLIST)
             res.slopes <- computePI.LISREL(MLIST = MLIST)
-            S.xx       <- lavsamplestats@cov.x[[g]]
+            S.xx       <- MLIST$cov.x
 
             S.yy <- res.Sigma + res.slopes %*% S.xx %*% t(res.slopes)
             S.yx <- res.slopes %*% S.xx
@@ -119,7 +118,7 @@ computeSigmaHatJoint <- function(lavmodel = NULL, GLIST = NULL, extra = FALSE,
                 attr(Sigma.hat[[g]], "log.det") <- Sigma.hat.log.det
             }
         }
-    } # ngroups
+    } # nblocks
 
     Sigma.hat
 }
@@ -130,14 +129,14 @@ computeMuHat <- function(lavmodel = NULL, GLIST = NULL) {
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
     nmat           <- lavmodel@nmat
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     representation <- lavmodel@representation
     meanstructure  <- lavmodel@meanstructure
 
     # return a list
-    Mu.hat <- vector("list", length=ngroups)
+    Mu.hat <- vector("list", length=nblocks)
 
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
 
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
@@ -150,7 +149,7 @@ computeMuHat <- function(lavmodel = NULL, GLIST = NULL) {
         } else {
             stop("only representation LISREL has been implemented for now")
         }
-    } # ngroups
+    } # nblocks
 
     Mu.hat
 }
@@ -161,21 +160,20 @@ computeMuHat <- function(lavmodel = NULL, GLIST = NULL) {
 ## Mu (Joint ) = [ Mu.y, Mu.x ] where
 ##     Mu.y = res.int + PI %*% M.x
 ##     Mu.x = M.x
-computeMuHatJoint <- function(lavmodel = NULL, GLIST = NULL,
-                              lavsamplestats = NULL) {
+computeMuHatJoint <- function(lavmodel = NULL, GLIST = NULL) {
 
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
     nmat           <- lavmodel@nmat
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     representation <- lavmodel@representation
     meanstructure  <- lavmodel@meanstructure
 
     # return a list
-    Mu.hat <- vector("list", length=ngroups)
+    Mu.hat <- vector("list", length=nblocks)
 
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
 
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
@@ -186,7 +184,7 @@ computeMuHatJoint <- function(lavmodel = NULL, GLIST = NULL,
             MLIST <- GLIST[ mm.in.group ]
             res.int    <- computeMuHat.LISREL(MLIST = MLIST)
             res.slopes <- computePI.LISREL(MLIST = MLIST)
-            M.x        <- lavsamplestats@mean.x[[g]]
+            M.x        <- MLIST$mean.x
 
             Mu.y <- res.int + res.slopes %*% M.x
             Mu.x <- M.x
@@ -194,7 +192,7 @@ computeMuHatJoint <- function(lavmodel = NULL, GLIST = NULL,
         } else {
             stop("only representation LISREL has been implemented for now")
         }
-    } # ngroups
+    } # nblocks
 
     Mu.hat
 }
@@ -206,16 +204,16 @@ computeTH <- function(lavmodel = NULL, GLIST = NULL) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups <- lavmodel@ngroups
+    nblocks <- lavmodel@nblocks
     nmat    <- lavmodel@nmat
     representation <- lavmodel@representation
     th.idx  <- lavmodel@th.idx
 
     # return a list
-    TH <- vector("list", length=ngroups)
+    TH <- vector("list", length=nblocks)
 
     # compute TH for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
 
         if(length(th.idx[[g]]) == 0) {
             TH[[g]] <- numeric(0L)
@@ -243,16 +241,16 @@ computePI <- function(lavmodel = NULL, GLIST = NULL) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
     conditional.x  <- lavmodel@conditional.x
 
     # return a list
-    PI <- vector("list", length=ngroups)
+    PI <- vector("list", length=nblocks)
 
     # compute TH for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -279,16 +277,16 @@ computeGW <- function(lavmodel = NULL, GLIST=NULL) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
     group.w.free   <- lavmodel@group.w.free
 
     # return a list
-    GW <- vector("list", length=ngroups)
+    GW <- vector("list", length=nblocks)
 
     # compute GW for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -308,7 +306,7 @@ computeGW <- function(lavmodel = NULL, GLIST=NULL) {
     # transform to proportions
     #gw <- unlist(GW)
     #gw <- exp(gw) / sum(exp(gw))
-    #for(g in 1:ngroups) {
+    #for(g in 1:nblocks) {
     #    GW[[g]] <- gw[g]
     #}
 
@@ -318,35 +316,25 @@ computeGW <- function(lavmodel = NULL, GLIST=NULL) {
 # *unconditional* variance/covariance matrix of Y
 #  - same as Sigma.hat if all Y are continuous)
 #  - if also Gamma, cov.x is used (only if categorical)
-computeVY <- function(lavmodel = NULL, GLIST = NULL, lavsamplestats = NULL,
-                      diagonal.only = FALSE) {
+computeVY <- function(lavmodel = NULL, GLIST = NULL, diagonal.only = FALSE) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    VY <- vector("list", length=ngroups)
+    VY <- vector("list", length=nblocks)
 
     # compute TH for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
 
-        if(!is.null(lavsamplestats)) {
-            cov.x <- lavsamplestats@cov.x[[g]]
-        } else {
-            if(lavmodel@fixed.x) {
-                stop("lavaaan ERROR: fixed.x = TRUE, but cov.x is NULL")
-            }
-            cov.x <- NULL
-        }
-
         if(representation == "LISREL") {
-            VY.g <- computeVY.LISREL(MLIST = MLIST, cov.x = cov.x)
+            VY.g <- computeVY.LISREL(MLIST = MLIST)
         } else {
             stop("only representation LISREL has been implemented for now")
         }
@@ -363,34 +351,25 @@ computeVY <- function(lavmodel = NULL, GLIST = NULL, lavsamplestats = NULL,
 
 # V(ETA): latent variances variances/covariances
 computeVETA <- function(lavmodel = NULL, GLIST = NULL, 
-                        remove.dummy.lv = FALSE, lavsamplestats = NULL) {
+                        remove.dummy.lv = FALSE) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    ETA <- vector("list", length=ngroups)
+    ETA <- vector("list", length=nblocks)
 
     # compute ETA for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
 
-        if(!is.null(lavsamplestats)) {
-            cov.x <- lavsamplestats@cov.x[[g]]
-        } else {
-            if(lavmodel@fixed.x) {
-                stop("lavaaan ERROR: fixed.x = TRUE, but cov.x is NULL")
-            }
-            cov.x <- NULL
-        }
-       
         if(representation == "LISREL") {
-            ETA.g <- computeVETA.LISREL(MLIST = MLIST, cov.x = cov.x)
+            ETA.g <- computeVETA.LISREL(MLIST = MLIST)
 
             if(remove.dummy.lv) {
                 # remove all dummy latent variables
@@ -416,15 +395,15 @@ computeVETAx <- function(lavmodel = NULL, GLIST = NULL) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    ETA <- vector("list", length=ngroups)
+    ETA <- vector("list", length=nblocks)
 
     # compute ETA for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -445,29 +424,27 @@ computeVETAx <- function(lavmodel = NULL, GLIST = NULL) {
 }
 
 # COV: observed+latent variances variances/covariances
-computeCOV <- function(lavmodel = NULL, GLIST = NULL, lavsamplestats = NULL,
-    remove.dummy.lv = FALSE) {
+computeCOV <- function(lavmodel = NULL, GLIST = NULL, 
+                       remove.dummy.lv = FALSE) {
 
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    COV <- vector("list", length=ngroups)
+    COV <- vector("list", length=nblocks)
 
     # compute COV for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
 
-        cov.x <- lavsamplestats@cov.x[[g]]
-
         if(representation == "LISREL") {
-            COV.g <- computeCOV.LISREL(MLIST = MLIST, cov.x = cov.x)
+            COV.g <- computeCOV.LISREL(MLIST = MLIST)
 
             if(remove.dummy.lv) {
                 # remove all dummy latent variables
@@ -499,15 +476,15 @@ computeEETA <- function(lavmodel = NULL, GLIST = NULL, lavsamplestats = NULL,
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    EETA <- vector("list", length=ngroups)
+    EETA <- vector("list", length=nblocks)
 
     # compute E(ETA) for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -546,15 +523,15 @@ computeEETAx <- function(lavmodel = NULL, GLIST = NULL, lavsamplestats = NULL,
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    EETAx <- vector("list", length=ngroups)
+    EETAx <- vector("list", length=nblocks)
 
     # compute E(ETA) for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -599,15 +576,15 @@ computeLAMBDA <- function(lavmodel = NULL, GLIST = NULL,
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    LAMBDA <- vector("list", length=ngroups)
+    LAMBDA <- vector("list", length=nblocks)
 
     # compute LAMBDA for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -634,15 +611,15 @@ computeTHETA <- function(lavmodel = NULL, GLIST = NULL) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    THETA <- vector("list", length=ngroups)
+    THETA <- vector("list", length=nblocks)
 
     # compute THETA for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -670,15 +647,15 @@ computeEY <- function(lavmodel = NULL, GLIST = NULL, lavsamplestats = NULL) {
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups        <- lavmodel@ngroups
+    nblocks        <- lavmodel@nblocks
     nmat           <- lavmodel@nmat
     representation <- lavmodel@representation
 
     # return a list
-    EY <- vector("list", length=ngroups)
+    EY <- vector("list", length=nblocks)
 
     # compute E(Y) for each group
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
         # which mm belong to group g?
         mm.in.group <- 1:nmat[g] + cumsum(c(0,nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
@@ -710,12 +687,16 @@ computeYHAT <- function(lavmodel = NULL, GLIST = NULL, lavsamplestats = NULL,
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
+    # ngroups, not nblocks!
+    ngroups <- lavsamplestats@ngroups
+
     # return a list
-    YHAT <- vector("list", length=lavsamplestats@ngroups)
+    YHAT <- vector("list", length=ngroups)
 
     # compute YHAT for each group
-    for(g in seq_len(lavsamplestats@ngroups)) {
+    for(g in seq_len(ngroups)) {
         # which mm belong to group g?
+        # FIXME: what if more than g blocks???
         mm.in.group <- 1:lavmodel@nmat[g] + cumsum(c(0L,lavmodel@nmat))[g]
         MLIST <- GLIST[ mm.in.group ]
 

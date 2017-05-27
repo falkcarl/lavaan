@@ -413,11 +413,13 @@ lav_model_vcov <- function(lavmodel       = NULL,
             N <- lavsamplestats@ntotal - lavsamplestats@ngroups
         }
 
-        #if(lavmodle@estimator %in% c("PML", "MML")) {
-        #    VarCov <- NVarCov
-        #} else {
+        if(lavdata@nlevels > 1L) {
+            # FIXME: single-group only
+            #VarCov <- (1/N) * NVarCov * lavdata@Lp[[1]]$nclusters[[2]]
             VarCov <- 1/N * NVarCov
-        #}
+        } else {
+            VarCov <- 1/N * NVarCov
+        }
 
     } else {
         warning("lavaan WARNING: could not compute standard errors!\n  lavaan NOTE: this may be a symptom that the model is not identified.\n")

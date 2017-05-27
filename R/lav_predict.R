@@ -77,11 +77,7 @@ lavPredict <- function(object, type = "lv", newdata = NULL, method = "EBM",
                    lavimplied = lavimplied,
                    data.obs = data.obs, eXo = eXo, method = method,
                    fsm = fsm, optim.method = optim.method)
-
         # remove dummy lv?
-        if(fsm) {
-            FSM <- attr(out, "fsm")
-        }
         out <- lapply(seq_len(lavdata@ngroups), function(g) {
                    lv.idx <- c(lavmodel@ov.y.dummy.lv.idx[[g]],
                                lavmodel@ov.x.dummy.lv.idx[[g]])
@@ -89,8 +85,31 @@ lavPredict <- function(object, type = "lv", newdata = NULL, method = "EBM",
                    if(length(lv.idx) > 0L) {
                        ret <- out[[g]][, -lv.idx, drop=FALSE]
                    }
-                   ret 
+                   ret
                })
+        if(fsm) {
+            FSM <- attr(out, "fsm")
+            out <- lapply(seq_len(lavdata@ngroups), function(g) {
+                      lv.idx <- c(lavmodel@ov.y.dummy.lv.idx[[g]],
+                                   lavmodel@ov.x.dummy.lv.idx[[g]])
+                       ret <- out[[g]]
+                       if(length(lv.idx) > 0L) {
+                           ret <- out[[g]][, -lv.idx, drop=FALSE]
+                       }
+                       ret 
+                   })
+            FSM <- lapply(seq_len(lavdata@ngroups), function(g) {
+                       lv.idx <- c(lavmodel@ov.y.dummy.lv.idx[[g]],
+                                   lavmodel@ov.x.dummy.lv.idx[[g]])
+                       ov.idx <- c(lavmodel@ov.y.dummy.ov.idx[[g]],
+                                   lavmodel@ov.x.dummy.ov.idx[[g]])
+                       ret <- FSM[[g]]
+                       if(length(lv.idx) > 0L) {
+                           ret <- FSM[[g]][-lv.idx, -ov.idx, drop=FALSE]
+                      }
+                       ret
+                   })
+        }
 
         # label?
         if(label) {
@@ -250,7 +269,7 @@ lav_predict_eta_normal <- function(lavobject = NULL,  # for convenience
     LAMBDA <- computeLAMBDA(lavmodel = lavmodel, remove.dummy.lv = FALSE)
     Sigma.hat <- lavimplied$cov
     Sigma.hat.inv <- lapply(Sigma.hat, solve)
-    VETA   <- computeVETA(lavmodel = lavmodel, lavsamplestats = lavsamplestats)
+    VETA   <- computeVETA(lavmodel = lavmodel)
     EETA   <- computeEETA(lavmodel = lavmodel, lavsamplestats = lavsamplestats)
     EY     <- computeEY(  lavmodel = lavmodel, lavsamplestats = lavsamplestats)
      
@@ -548,7 +567,7 @@ lav_predict_eta_ebm <- function(lavobject = NULL,  # for convenience
             if(out$convergence == 0L) {
                 eta.i <- out$par
             } else {
-                eta.i <- rep(as.numeric(NA), nfac2)
+                eta.i <- rep(as.numeric(NA), nfac)
             }
 
             # add dummy ov.y lv values

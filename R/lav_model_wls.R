@@ -5,7 +5,7 @@ lav_model_wls_est <- function(lavmodel = NULL, GLIST = NULL) { #,
     # state or final?
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
-    ngroups       <- lavmodel@ngroups
+    nblocks       <- lavmodel@nblocks
     meanstructure <- lavmodel@meanstructure
     categorical   <- lavmodel@categorical
     group.w.free  <- lavmodel@group.w.free
@@ -27,8 +27,8 @@ lav_model_wls_est <- function(lavmodel = NULL, GLIST = NULL) { #,
         GW <- computeGW(lavmodel = lavmodel, GLIST = GLIST)
     }
 
-    WLS.est <- vector("list", length=ngroups)
-    for(g in 1:ngroups) {
+    WLS.est <- vector("list", length=nblocks)
+    for(g in 1:nblocks) {
 
         # PI?
         if(lavmodel@conditional.x && lavmodel@nexo > 0L) {
@@ -131,15 +131,13 @@ lav_model_wls_v <- function(lavmodel       = NULL,
         
         if(structured) {
             if(lavmodel@conditional.x) {
-                 Sigma.hat <- computeSigmaHatJoint(lavmodel = lavmodel,
-                                 lavsamplestats = lavsamplestats)
+                 Sigma.hat <- computeSigmaHatJoint(lavmodel = lavmodel)
             } else {
                  Sigma.hat <- computeSigmaHat(lavmodel = lavmodel)
             }
             if(lavmodel@meanstructure) {
                 if(lavmodel@conditional.x) {
-                    Mu.hat <- computeMuHatJoint(lavmodel = lavmodel, 
-                                  lavsamplestats = lavsamplestats)
+                    Mu.hat <- computeMuHatJoint(lavmodel = lavmodel)
                 } else {
                     Mu.hat <- computeMuHat(lavmodel = lavmodel)
                 }

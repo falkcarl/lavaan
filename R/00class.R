@@ -9,13 +9,16 @@ setClass("lavData",
         data.type="character",     # "full", "moment" or "none"
         ngroups="integer",         # number of groups
         group="character",         # group variable
+        nlevels="integer",         # number of levels
         cluster="character",       # cluster variable(s)
         group.label="character",   # group labels
+        level.label="character",   # level labels
         std.ov="logical",          # standardize observed variables?
         nobs="list",               # effective number of observations
         norig="list",              # original number of observations
         ov.names="list",           # variable names (per group)
         ov.names.x="list",         # exo variable names (per group)
+        ov.names.l="list",         # names per level
         #ov.types="list",           # variable types (per group)
         #ov.idx="list",             # column indices (all observed variables)
         ordered="character",       # ordered variables
@@ -25,6 +28,7 @@ setClass("lavData",
         Mp="list",                 # if not complete, missing patterns
                                    # we need this here, to get nobs right!
         Rp="list",                 # response patterns (categorical only)
+        Lp="list",                 # level patterns
         eXo="list",                # local copy exo only
         X="list"                   # local copy
     )
@@ -33,7 +37,6 @@ setClass("lavData",
 
 setClass("lavSampleStats",         # sample moments
     representation(
-        CAT="list",
         var="list",                # observed variances (per group)
         cov="list",                # observed var/cov matrix (per group)
         mean="list",               # observed mean vector (per group)
@@ -73,6 +76,8 @@ setClass("lavSampleStats",         # sample moments
         missing="list",            # missingness information
         missing.h1="list",         # h1 model
 
+        YLp = "list",              # cluster/level information
+
         zero.cell.tables="list"    # bivariate tables with empty cells
     )
 )
@@ -87,10 +92,12 @@ setClass("lavModel",          # MATRIX representation of the sem model
         representation="character",  # stub, until we define more classes
         meanstructure="logical",
         categorical="logical",
+        multilevel="logical",
         group.w.free="logical",
         link="character",
 
-        ngroups="integer",
+        nblocks="integer",
+        ngroups="integer",   # only for rsem!! (which uses rsem:::computeDelta)
         nmat="integer",
         nvar="integer",
         num.idx="list",
@@ -182,9 +189,12 @@ setClass("lavaan",
         Fit         = "Fit",             # fitted results 
         boot        = "list",            # bootstrap results
         optim       = "list",            # optimizer results
+        loglik      = "list",            # loglik values and info
         implied     = "list",            # model implied moments
         vcov        = "list",            # vcov
         test        = "list",            # test
+        h1          = "list",            # unrestricted model results
+        baseline    = "list",            # baseline model results
         external    = "list"             # optional slot, for add-on packages
     ) 
 )

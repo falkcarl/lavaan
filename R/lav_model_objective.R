@@ -38,7 +38,8 @@ lav_model_objective <- function(lavmodel       = NULL,
             Mu.hat <- computeMuHat(lavmodel = lavmodel, GLIST = GLIST)
         }
         if(debug) print(WLS.est)
-    } else if(estimator %in% c("ML", "PML", "FML", "REML")) {
+    } else if(estimator %in% c("ML", "PML", "FML", "REML") && 
+              lavdata@nlevels == 1L) {
         # compute moments for all groups
         #if(conditional.x) {
         #    Sigma.hat <- computeSigmaHatJoint(lavmodel = lavmodel,
@@ -94,17 +95,25 @@ lav_model_objective <- function(lavmodel       = NULL,
     fx <- 0.0
     fx.group <- numeric( lavsamplestats@ngroups )
     logl.group <- rep(as.numeric(NA), lavsamplestats@ngroups)
+
     for(g in 1:lavsamplestats@ngroups) {
 
         # incomplete data and fiml?
         if(lavsamplestats@missing.flag && estimator != "Bayes") {
-            if(estimator == "ML") {
+            if(estimator == "ML" && lavdata@nlevels == 1L) {
                 # FIML
                 if(!attr(Sigma.hat[[g]], "po")) return(Inf)
                 group.fx <- estimator.FIML(Sigma.hat=Sigma.hat[[g]],
                                            Mu.hat=Mu.hat[[g]],
                                            Yp=lavsamplestats@missing[[g]],
                                            h1=lavsamplestats@missing.h1[[g]]$h1,                                           N=lavsamplestats@nobs[[g]])
+            } else if(estimator == "ML" && lavdata@nlevels > 1L) {
+                #group.fx <- estimator.2L(lavmodel       = lavmodel,
+                #                         GLIST          = GLIST,
+                #                         lavdata        = lavdata,
+                #                         lavsamplestats = lavsamplestats,
+                #                         group          = g)
+                group.fx <- 0
             } else {
                 stop("this estimator: `", estimator, 
                      "' can not be used with incomplete data and the missing=\"ml\" option")
@@ -112,7 +121,13 @@ lav_model_objective <- function(lavmodel       = NULL,
         } else if(estimator == "ML" || estimator == "Bayes") {
         # complete data
             # ML and friends
-            if(conditional.x) {
+            if(lavdata@nlevels > 1L) {
+                group.fx <- estimator.2L(lavmodel       = lavmodel,
+                                         GLIST          = GLIST,
+                                         Lp             = lavdata@Lp[[g]],
+                                         lavsamplestats = lavsamplestats,
+                                         group          = g)
+            } else if(conditional.x) {
                 group.fx <- estimator.ML_res(
                     Sigma.hat        = Sigma.hat[[g]],
                     Mu.hat           = Mu.hat[[g]],
@@ -216,7 +231,9 @@ lav_model_objective <- function(lavmodel       = NULL,
         }
 
         if(estimator == "ML" || estimator == "REML" || estimator == "NTRLS") {
-            group.fx <- 0.5 * group.fx ## FIXME
+            if(lavdata@nlevels == 1L) {
+                group.fx <- 0.5 * group.fx ## FIXME
+            }
         } else if(estimator == "PML" || estimator == "FML" || 
                   estimator == "MML") {
             # do nothing
@@ -288,4 +305,5 @@ lav_model_objective <- function(lavmodel       = NULL,
 
     fx
 }
+
 

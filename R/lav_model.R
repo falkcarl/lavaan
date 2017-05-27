@@ -9,18 +9,30 @@
 # construct MATRIX lavoptions$representation of the model
 lav_model <- function(lavpartable      = NULL,
                       lavoptions       = NULL,
-                      th.idx           = list()) {
+                      th.idx           = list(),
+                      cov.x            = list(),
+                      mean.x           = list()) { # for conditional.x only
+                                                   # (not really needed,
+                                                   #  but as a failsafe)
 
     # handle bare-minimum partables
     lavpartable <- lav_partable_complete(lavpartable)
  
     # global info from user model
-    ngroups <- max(lavpartable$group)
+    nblocks <- lav_partable_nblocks(lavpartable)
     meanstructure <- any(lavpartable$op == "~1")
     categorical <- any(lavpartable$op == "|")
-    if(categorical) meanstructure <- TRUE
+    if(categorical) { 
+        meanstructure <- TRUE
+    }
     group.w.free <- any(lavpartable$lhs == "group" & lavpartable$op == "%")
-
+    multilevel <- FALSE
+    if(!is.null(lavpartable$level)) {
+        nlevels <- lav_partable_nlevels(lavpartable)
+        if(nlevels > 1L) {
+            multilevel <- TRUE
+        }
+    }
 
     # handle variable definitions and (in)equality constraints
     CON <- lav_constraints_parse(partable = lavpartable,
@@ -40,7 +52,7 @@ lav_model <- function(lavpartable      = NULL,
 
     # select model matrices
     if(lavoptions$representation == "LISREL") {
-        REP <- representation.LISREL(lavpartable, target=NULL, extra=TRUE)
+        REP <- representation.LISREL(lavpartable, target = NULL, extra = TRUE)
     } else {
         stop("lavaan ERROR: only representation \"LISREL\" has been implemented.")
     }
@@ -69,25 +81,25 @@ lav_model <- function(lavpartable      = NULL,
     m.free.idx <- m.user.idx <- vector(mode="list", length=nG)
     x.free.idx <- x.user.idx <- vector(mode="list", length=nG)
 
-    # prepare ngroups-sized slots
-    nvar <- integer(ngroups)
+    # prepare nblocks-sized slots
+    nvar <- integer(nblocks)
     nmat <- unlist(attr(REP, "mmNumber"))
-    num.idx <- vector("list", length=ngroups)
-    nexo <- integer(ngroups)
-    ov.x.dummy.ov.idx <- vector(mode="list", length=ngroups)
-    ov.x.dummy.lv.idx <- vector(mode="list", length=ngroups)
-    ov.y.dummy.ov.idx <- vector(mode="list", length=ngroups)
-    ov.y.dummy.lv.idx <- vector(mode="list", length=ngroups)
+    num.idx <- vector("list", length=nblocks)
+    nexo <- integer(nblocks)
+    ov.x.dummy.ov.idx <- vector(mode="list", length=nblocks)
+    ov.x.dummy.lv.idx <- vector(mode="list", length=nblocks)
+    ov.y.dummy.ov.idx <- vector(mode="list", length=nblocks)
+    ov.y.dummy.lv.idx <- vector(mode="list", length=nblocks)
 
     offset <- 0L
-    for(g in 1:ngroups) {
+    for(g in 1:nblocks) {
 
-        # observed and latent variables for this group
-        ov.names <- vnames(lavpartable, "ov", group=g)
-        ov.names.nox <- vnames(lavpartable, "ov.nox", group=g)
-        ov.names.x <- vnames(lavpartable, "ov.x", group=g)
+        # observed and latent variables for this block
+        ov.names <-     lav_partable_vnames(lavpartable, "ov",     block = g)
+        ov.names.nox <- lav_partable_vnames(lavpartable, "ov.nox", block = g)
+        ov.names.x <-   lav_partable_vnames(lavpartable, "ov.x",   block = g)
         nexo[g] <- length(ov.names.x)
-        ov.num <- vnames(lavpartable, "ov.num", group=g)
+        ov.num <-       lav_partable_vnames(lavpartable, "ov.num", block = g)
         if(lavoptions$conditional.x) {
             nvar[g] <- length(ov.names.nox)
         } else {
@@ -95,7 +107,7 @@ lav_model <- function(lavpartable      = NULL,
         }
         num.idx[[g]] <- match(ov.num, ov.names.nox)
 
-        # model matrices for this group
+        # model matrices for this block
         mmNumber    <- attr(REP, "mmNumber")[[g]]
         mmNames     <- attr(REP, "mmNames")[[g]]
         mmSymmetric <- attr(REP, "mmSymmetric")[[g]]
@@ -120,7 +132,7 @@ lav_model <- function(lavpartable      = NULL,
             dimNames[[offset]] <- mmDimNames[[mm]]
 
             # select elements for this matrix
-            idx <- which(lavpartable$group == g & REP$mat == mmNames[mm]) 
+            idx <- which(lavpartable$block == g & REP$mat == mmNames[mm]) 
 
             # create empty `pattern' matrix
             # FIXME: one day, we may want to use sparse matrices...
@@ -172,6 +184,19 @@ lav_model <- function(lavpartable      = NULL,
                 T <- t(tmp); tmp[lower.tri(tmp)] <- T[lower.tri(T)]
             }
 
+            # 4b. override with cov.x (if conditional.x = TRUE)
+            # new in 0.6-1
+            # shouldn't be needed, if lavpartable$start contains cov.x values
+            if(mmNames[mm] == "cov.x") {
+                tmp <- cov.x[[g]]
+            }
+            # 4c. override with mean.x (if conditional.x = TRUE)
+            # new in 0.6-1
+            # shouldn't be needed, if lavpartable$start contains mean.x values
+            if(mmNames[mm] == "mean.x") {
+                tmp <- as.matrix(mean.x[[g]])
+            }
+
             # representation specific stuff
             if(lavoptions$representation == "LISREL" && mmNames[mm] == "lambda") { 
                 ov.dummy.names.nox <- attr(REP, "ov.dummy.names.nox")[[g]]
@@ -200,7 +225,7 @@ lav_model <- function(lavpartable      = NULL,
                 idx <- which(tmp[,1L] == 0.0)
                 tmp[idx,1L] <- 1.0    
             }
-            
+
             # assign matrix to GLIST
             GLIST[[offset]] <- tmp
         } # mm
@@ -212,6 +237,21 @@ lav_model <- function(lavpartable      = NULL,
     #    fixed.x <- TRUE
     #}
 
+    # dirty hack to mimic MUML
+    if(!is.null(lavoptions$tech.muml.scale)) {
+        warning("lavaan WARNING: using muml scale in group 2")
+
+        # find matrix
+        lambda.idx <- which(names(GLIST) == "lambda")[2L]
+
+        # find rows/cols
+        B.names <- paste0("b", ov.names) ## ad-hoc assumption!!!
+        COLS <-  match(B.names, LV.names)
+        ROWS <- seq_len(nvar[2])
+        stopifnot(length(COLS) == length(ROWS))
+        GLIST[[ lambda.idx ]][ cbind(ROWS, COLS) ] <- lavoptions$tech.muml.scale
+    }
+
 
     Model <- new("lavModel",
                  GLIST=GLIST,
@@ -221,8 +261,10 @@ lav_model <- function(lavpartable      = NULL,
                  representation=lavoptions$representation,
                  meanstructure=meanstructure,
                  categorical=categorical,
+                 multilevel=multilevel,
                  link=lavoptions$link,
-                 ngroups=ngroups,
+                 nblocks=nblocks,
+                 ngroups=nblocks, # for rsem!!!
                  group.w.free=group.w.free,
                  nmat=nmat,
                  nvar=nvar,

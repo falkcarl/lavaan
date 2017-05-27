@@ -264,24 +264,26 @@ lav_fit_measures <- function(object, fit.measures="all",
         # this is not strictly needed for ML, but it is for
         # GLS and WLS
         # and MLM and MLR to get the scaling factor(s)!
-        if (!is.null(baseline.model) & is(baseline.model, "lavaan")) {
+        if (!is.null(baseline.model) && is(baseline.model, "lavaan")) {
             fit.indep <- baseline.model
-        } else if (!is.null(object@external$baseline.model) & is(object@external$baseline.model, "lavaan")) {
+        } else if (!is.null(object@external$baseline.model) &&
+                   is(object@external$baseline.model, "lavaan")) {
             fit.indep <- object@external$baseline.model
             ## check baseline converged
             if (!fit.indep@optim$converged) {
-              fit.indep <- NULL
+                fit.indep <- NULL
             } else {
-              ## check test matches and baseline converged
-              sameTest <- object@Options$test == fit.indep@Options$test
-              sameSE <- object@Options$se == fit.indep@Options$se
-              sameEstimator <- object@Options$estimator == fit.indep@Options$estimator
-              if (!all(sameTest, sameSE, sameEstimator)) {
-                fit.indep <- try(update(fit.indep, test = object@Options$test,
-                                        se = object@Options$se,
-                                        estimator = object@Options$estimator),
-                                 silent = TRUE)
-              }
+                ## check test matches and baseline converged
+                sameTest <- ( object@Options$test == fit.indep@Options$test )
+                sameSE <- ( object@Options$se == fit.indep@Options$se )
+                sameEstimator <- ( object@Options$estimator == fit.indep@Options$estimator )
+                if (!all(sameTest, sameSE, sameEstimator)) {
+                    fit.indep <- try(update(fit.indep,
+                                            test = object@Options$test,
+                                            se   = object@Options$se,
+                                            estimator = object@Options$estimator),
+                                     silent = TRUE)
+                }
             }
         } else {
             fit.indep <- try(lav_object_independence(object), silent = TRUE)
@@ -397,7 +399,6 @@ lav_fit_measures <- function(object, fit.measures="all",
             if("rni.scaled" %in% fit.measures) {
                 t1 <- X2.scaled - df.scaled
                 t2 <- X2.null.scaled - df.null.scaled
-                t2 <- X2.null - df.null
                 if(is.na(t1) || is.na(t2)) {
                     RNI <- NA
                 } else if(t2 == 0) {
@@ -612,64 +613,17 @@ lav_fit_measures <- function(object, fit.measures="all",
 
         if(estimator == "ML" || estimator == "MML") {
 
-            # logl H1 -- unrestricted (aka saturated) model
-            logl.H1.group <- numeric(G)
-
-            # check if everything is numeric, OR if we have exogenous
-            # factor with 2 levels only
-            logl.ok <- FALSE
-            if(all(object@Data@ov$type == "numeric")) {
-                logl.ok <- TRUE
+            # do we have a @h1 slot?
+            if("h1" %in% slotNames(object) && length(object@h1) > 0L) {
+                logl.H1.group <- object@h1$loglik.group
+                logl.H1       <- object@h1$loglik
             } else {
-                not.idx <- which(object@Data@ov$type != "numeric")
-                for(i in not.idx) {
-                    if(object@Data@ov$type[i] == "factor" &&
-                       object@Data@ov$exo[i] == 1L &&
-                       object@Data@ov$nlev[i] == 2L) {
-                        logl.ok <- TRUE
-                    } else {
-                        logl.ok <- FALSE
-                        break
-                    }
-                }
-            }
+                out <- lav_h1_logl(lavdata = object@Data,
+                                   lavsamplestats = object@SampleStats,
+                                   lavoptions = object@Options)
 
-            if(logl.ok) {
-                for(g in 1:G) {
-                    if(!object@SampleStats@missing.flag) {
-                        if(object@Model@conditional.x) {
-                            nvar <- ncol(object@SampleStats@res.cov[[g]])
-                            Ng <- object@SampleStats@nobs[[g]]
-                            c <- Ng*nvar/2 * log(2 * pi)
-                            logl.H1.group[g] <- ( -c -(Ng/2) *
-                                        object@SampleStats@res.cov.log.det[[g]]
-                                              - (Ng/2)*nvar )
-                        } else {
-                            nvar <- ncol(object@SampleStats@cov[[g]])
-                            Ng <- object@SampleStats@nobs[[g]]
-                            c <- Ng*nvar/2 * log(2 * pi)
-                            logl.H1.group[g] <- ( -c -(Ng/2) *
-                                            object@SampleStats@cov.log.det[[g]]
-                                              - (Ng/2)*nvar )
-                        }
-                    } else { # missing patterns case
-                        pat <- object@Data@Mp[[g]]$pat
-                        Ng <- object@Data@nobs[[g]]
-                        ni <- as.numeric(apply(pat, 1, sum) %*%
-                                         object@Data@Mp[[g]]$freq)
-                        fx.full <- object@SampleStats@missing.h1[[g]]$h1
-                        logl.H1.group[g] <- - (ni/2 * log(2 * pi)) -
-                                                  (Ng/2 * fx.full)
-                    }
-                }
-                if(G > 1) {
-                    logl.H1 <- sum(logl.H1.group)
-                } else {
-                    logl.H1 <- logl.H1.group[1]
-                }
-            } else {
-                logl.H1.group <- as.numeric(NA)
-                logl.H1 <- as.numeric(NA)
+                logl.H1.group <- out$loglik.group
+                logl.H1       <- out$loglik
             }
 
             if("unrestricted.logl" %in% fit.measures) {
@@ -677,22 +631,23 @@ lav_fit_measures <- function(object, fit.measures="all",
             }
 
             # logl H0
-            logl.H0.group <- numeric(G)
-            if(logl.ok) {
-                for(g in 1:G) {
-                    Ng <- object@SampleStats@nobs[[g]]
-                    logl.H0.group[g] <- -Ng * (fx.group[g] -
-                                               logl.H1.group[g]/Ng)
-                }
-                if(G > 1) {
-                    logl.H0 <- sum(logl.H0.group)
-                } else {
-                    logl.H0 <- logl.H0.group[1]
-                }
-            } else if(object@Options$estimator == "MML") {
-                logl.H0 <- -1 * fx
+            if("loglik" %in% slotNames(object)) {
+                logl.H0.group <- object@loglik$loglik.group
+                logl.H0       <- object@loglik$loglik
+                AIC           <- object@loglik$AIC
+                BIC           <- object@loglik$BIC
+                BIC2          <- object@loglik$BIC2
             } else {
-                logl.H0 <- as.numeric(NA)
+                out <- lav_model_loglik(lavdata        = object@Data,
+                                        lavsamplestats = object@SampleStats,
+                                        lavimplied     = object@implied,
+                                        lavmodel       = object@Model,
+                                        lavoptions     = object@Options)
+                logl.H0.group <- out$loglik.group
+                logl.H0       <- out$loglik
+                AIC           <- out$AIC
+                BIC           <- out$BIC
+                BIC2          <- out$BIC2   
             }
 
             if("logl" %in% fit.measures) {
@@ -700,7 +655,6 @@ lav_fit_measures <- function(object, fit.measures="all",
             }
 
             # AIC
-            AIC <-  -2*logl.H0 + 2*npar
             if("aic" %in% fit.measures) {
                 indices["aic"] <- AIC
             }
@@ -708,15 +662,9 @@ lav_fit_measures <- function(object, fit.measures="all",
             # BIC
             if("bic" %in% fit.measures ||
                "bic2" %in% fit.measures) {
-                BIC <- -2*logl.H0 + npar*log(N)
                 indices["bic"] <- BIC
-
-                # add sample-size adjusted bic
-                N.star <- (N + 2) / 24
-                BIC2 <- -2*logl.H0 + npar*log(N.star)
                 indices["bic2"] <- BIC2
             }
-
 
             # scaling factor for MLR
             if(object@Options$test == "yuan.bentler") {
