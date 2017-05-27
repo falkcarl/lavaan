@@ -41,7 +41,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   
   ## point estimate based on fitted model
   est<-ptable$est[pindx[1]]
-  ptable$ustart<-ptable$start<-ptable$est#+rnorm(1,0,.01)
+  ptable$ustart<-ptable$start<-ptable$est # not sure if necessary
   if(is.null(start)){
     start<-est
   }
@@ -101,19 +101,23 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   ## Then, estimate using normal theory ML
   if(diff.method[1]=="satorra.2000"){
     prevmodel<-as.list(object@call)
-    prevmodel$start<-ptable
-    prevmodel$constraints<-c(prevmodel$constraints,paste(label,"==",est,sep=""))
-    #M0<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
-    M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
+    constrow<-data.frame(id=max(ptable$id)+1,lhs=label,op="==",rhs=est,user=1,block=0,group=1,
+                         free=0,ustart=0,exo=0,label="",plabel="",start=0,est=0,se=0)
+    tmpptable<-rbind(ptable,constrow)
+    prevmodel$model<-tmpptable
+    M0<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
+    #M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
     
     # try again if not converged; apparently just rounding est can work
     if(!M0@Fit@converged){
       prevmodel<-as.list(object@call)
-      prevmodel$start<-ptable
       est<-round(est,2)
-      prevmodel$constraints<-c(prevmodel$constraints,paste(label,"==",est,sep=""))
-      #M0<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
-      M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
+      constrow<-data.frame(id=max(ptable$id)+1,lhs=label,op="==",rhs=est,user=1,block=0,group=1,
+                           free=0,ustart=0,exo=0,label="",plabel="",start=0,est=0,se=0)
+      tmpptable<-rbind(ptable,constrow)
+      prevmodel$model<-tmpptable
+      M0<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
+      #M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
       
     }
 
@@ -121,16 +125,17 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     crit<-chat*crit
 
     prevmodel<-as.list(object@call)
-    prevmodel$start<-ptable
+    prevmodel$model<-ptable
     prevmodel$estimator<-"ML"
-    #object<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
-    object<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
+    object<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
+    #object<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
     
     
   } else {
     prevmodel<-as.list(object@call)
-    prevmodel$start<-ptable
-    object<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
+    prevmodel$model<-ptable
+    object<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
+    #object<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
   }
   
   result$crit<-crit
@@ -240,11 +245,14 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
 # Just computes constrains quantity in label to p and computes difference test for use with lci functions
 lci_diff_test<-function(p,fitmodel,label,diff.method="default"){
   prevmodel<-as.list(fitmodel@call)
+  ptable<-parTable(fitmodel)
   for(j in 1:length(p)){
-    prevmodel$constraints<-c(prevmodel$constraints,paste(label[j],"==",p[j],sep=""))
+    constrow<-data.frame(id=max(ptable$id)+1,lhs=label[j],op="==",rhs=p[j],user=1,block=0,group=1,
+                         free=0,ustart=0,exo=0,label="",plabel="",start=0,est=0,se=0)
+    tmpptable<-rbind(ptable,constrow)
   }
-  #M0<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
-  M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
+  M0<-try(do.call(as.character(prevmodel[1]),prevmodel[-1]),silent=TRUE)
+  #M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
   
   if(class(M0)=="try-error"){
     return(NA)
