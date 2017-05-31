@@ -270,7 +270,8 @@ lci_diff_test<-function(p,fitmodel,label,diff.method="default"){
     ptable<-rbind(ptable,constrow)
   }
   prevmodel$model<-ptable
-  M0<-try(do.call(prevmodel[1][[1]],prevmodel[-1]),silent=TRUE)
+  M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
+  #M0<-try(do.call(prevmodel[1][[1]],prevmodel[-1]),silent=TRUE)
   #M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
   
   if(class(M0)=="try-error"){
@@ -444,4 +445,29 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
   }
   return(list(est=p1,D=D1,iter=count-1,fariter=fariter))
   
+}
+
+profile_lci<-function(object,label,diff.method,grid){
+  prevmodel <- as.list(object@call)
+  ptable<-parTable(object)
+  prevmodel$model <- ptable
+  f <- strsplit(as.character(prevmodel[1]), "::")[[1]]
+  if (length(f) == 1) {
+    f <- f[1]
+  }
+  else {
+    f <- get(f[2], asNamespace(f[1]))
+  }
+  object <- try(do.call(f, prevmodel[-1]), silent = TRUE)
+  
+  D<-vector("numeric")
+  for(j in 1:length(grid)){
+    Dtmp<-try(lci_diff_test(grid[j],object,label,diff.method))
+    if(!is.na(Dtmp)&class(Dtmp)!="try-error"){
+      D<-c(D,Dtmp)
+    } else {
+      D<-c(D,NA)
+    }
+  }
+  return(D)
 }
