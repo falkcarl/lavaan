@@ -51,6 +51,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   result$est<-est
     
   crit<-qchisq(level,1) ## hardcoded 1 df for now
+  result$crit<-crit
   
   ## Check whether test is satorra.2000
   ## Code borrowed directly from lavTestLRT function
@@ -150,8 +151,6 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     #object<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
   }
   
-  result$crit<-crit
-  
   ## Begin optimization
   for(b in bound){
     D<-NULL
@@ -174,7 +173,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
                       diff.method=diff.method)))
 
         if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$pars,object,label,diff.method="default")
+          D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method)
           est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL
           conv<-LCI$convergence
@@ -186,7 +185,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
                       label=label, pindx=pindx, crit=crit, bound=b,
                       diff.method=diff.method,method="BFGS"))
         if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$par,object,label,diff.method="default")
+          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method)
           est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL          
           conv<-LCI$convergence
@@ -198,7 +197,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
                       label=label, pindx=pindx, crit=crit, bound=b,
                       diff.method=diff.method))
         if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$par,object,label,diff.method="default")
+          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method)
           est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL
           conv<-LCI$convergence
@@ -213,7 +212,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       eqfun<-lci_diff_test
 
       if(class(LCI)!="try-error"){
-        D<-lci_diff_test(LCI$pars,object,label,diff.method="default")
+        D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
         attr(D,"mod")<-NULL
         conv<-LCI$convergence
@@ -228,8 +227,8 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       }
       LCI<-lci_bisect(object,label,crit, bound=b,diff.method=diff.method[1],iterlim=iterlim)
       if(class(LCI)!="try-error"){
-        D<-LCI$D
-        attr(D,"mod")<-NULL
+        D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method)
+        attr(D,"mod")<-NULL        
         est.bound<-LCI$est
         conv<-LCI$iter
       } else{
@@ -242,12 +241,12 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     if(b=="upper"){
       result$upper<-est.bound
       result$convupper<-conv
-      result$Dupper<-D
+      result$Dupper<-(result$crit/crit)*D
     }
     if(b=="lower"){
       result$lower<-est.bound
       result$convlower<-conv
-      result$Dlower<-D
+      result$Dlower<-(result$crit/crit)*D
     }
   }
   
