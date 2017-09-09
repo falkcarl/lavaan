@@ -103,16 +103,13 @@ lav_model_gradient <- function(lavmodel       = NULL,
         } else if(categorical) {
             TH <- computeTH(lavmodel = lavmodel, GLIST = GLIST)
         }
+
         if(conditional.x) {
             PI <- computePI(lavmodel = lavmodel, GLIST = GLIST)
+        } else if(estimator == "PML") {
+            PI <- vector("list", length = lavmodel@nblocks)
         }
-        if(estimator == "PML") {
-            if(lavmodel@nexo > 0L) {
-                PI <- computePI(lavmodel = lavmodel)
-            } else {
-                PI <- vector("list", length = lavmodel@nblocks)
-            }
-        }
+
         if(group.w.free) {
             GW <- computeGW(lavmodel = lavmodel, GLIST = GLIST)
         }
@@ -749,7 +746,7 @@ computeDelta <- function(lavmodel = NULL, GLIST. = NULL,
                             DELTA.th[no.num.idx,,drop=FALSE] +
                             (dth.dDelta %*% dDelta.dx)[no.num.idx,,drop=FALSE]
                     }
-                    if(lavmodel@nexo[g] > 0L) {
+                    if(conditional.x && lavmodel@nexo[g] > 0L) {
                         DELTA.pi <- 
                             derivative.pi.LISREL(m=mname,
                                                  idx=m.el.idx[[mm]],

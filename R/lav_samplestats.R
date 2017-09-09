@@ -218,11 +218,10 @@ lav_samplestats_from_data <- function(lavdata           = NULL,
         ov.levels <- DataOv$nlev[ match(ov.names[[g]], DataOv$name) ]
         CAT <- list()
         if("ordered" %in% ov.types) {
+            categorical <- TRUE
             if(nlevels > 1L) {
-                stop("lavaan ERROR: multilevel + categorical not supported yet.")
-            } else {
-                categorical <- TRUE
-            }
+                warning("lavaan ERROR: multilevel + categorical not supported yet.")
+            } 
         }
 
         if(categorical) {
@@ -234,21 +233,40 @@ lav_samplestats_from_data <- function(lavdata           = NULL,
             if(verbose) {
                 cat("Estimating sample thresholds and correlations ... ")
             }
-            CAT <- muthen1984(Data=X[[g]],
-                              ov.names=ov.names[[g]],
-                              ov.types=ov.types,
-                              ov.levels=ov.levels,
-                              ov.names.x=ov.names.x[[g]],
-                              eXo=eXo[[g]],
-                              group = g, # for error messages only
-                              missing = missing, # listwise or pairwise?
-                              WLS.W = WLS.W,
-                              optim.method = optim.method,
-                              zero.add = zero.add,
-                              zero.keep.margins = zero.keep.margins,
-                              zero.cell.warn = FALSE,
-                              zero.cell.tables = TRUE,
-                              verbose=debug)
+
+            if(conditional.x) {
+                CAT <- muthen1984(Data=X[[g]],
+                                  ov.names=ov.names[[g]],
+                                  ov.types=ov.types,
+                                  ov.levels=ov.levels,
+                                  ov.names.x=ov.names.x[[g]],
+                                  eXo=eXo[[g]],
+                                  group = g, # for error messages only
+                                  missing = missing, # listwise or pairwise?
+                                  WLS.W = WLS.W,
+                                  optim.method = optim.method,
+                                  zero.add = zero.add,
+                                  zero.keep.margins = zero.keep.margins,
+                                  zero.cell.warn = FALSE,
+                                  zero.cell.tables = TRUE,
+                                  verbose=debug)
+            } else {
+                CAT <- muthen1984(Data=X[[g]],
+                                  ov.names=ov.names[[g]],
+                                  ov.types=ov.types,
+                                  ov.levels=ov.levels,
+                                  ov.names.x=NULL,
+                                  eXo=NULL,
+                                  group = g, # for error messages only
+                                  missing = missing, # listwise or pairwise?
+                                  WLS.W = WLS.W,
+                                  optim.method = optim.method,
+                                  zero.add = zero.add,
+                                  zero.keep.margins = zero.keep.margins,
+                                  zero.cell.warn = FALSE,
+                                  zero.cell.tables = TRUE,
+                                  verbose=debug)
+            }
             # empty cell tables
             zero.cell.tables[[g]] <- CAT$zero.cell.tables
             if(verbose) cat("done\n")
@@ -433,7 +451,7 @@ lav_samplestats_from_data <- function(lavdata           = NULL,
             #    stop("lavaan ERROR: multilevel + fiml not supported yet")
             #}
             if(conditional.x) {
-                stop("lavaan ERROR: multilevel + conditional.x not supported yet")
+                stop("lavaan ERROR: missing = \"ml\" + conditional.x not supported yet")
             }
             stopifnot(!conditional.x) # for now
             missing.flag. <- TRUE

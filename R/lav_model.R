@@ -9,7 +9,7 @@
 # construct MATRIX lavoptions$representation of the model
 lav_model <- function(lavpartable      = NULL,
                       lavoptions       = NULL,
-                      th.idx           = list(),
+                      th.idx           = list(),   
                       cov.x            = list(),
                       mean.x           = list()) { # for conditional.x only
                                                    # (not really needed,
@@ -24,6 +24,12 @@ lav_model <- function(lavpartable      = NULL,
     categorical <- any(lavpartable$op == "|")
     if(categorical) { 
         meanstructure <- TRUE
+
+        # handle th.idx if length(th.idx) != nblocks
+        if(nblocks != length(th.idx)) {
+            th.idx <- rep(th.idx, each = nblocks)
+        }
+        
     }
     group.w.free <- any(lavpartable$lhs == "group" & lavpartable$op == "%")
     multilevel <- FALSE
@@ -102,10 +108,11 @@ lav_model <- function(lavpartable      = NULL,
         ov.num <-       lav_partable_vnames(lavpartable, "ov.num", block = g)
         if(lavoptions$conditional.x) {
             nvar[g] <- length(ov.names.nox)
+            num.idx[[g]] <- which(ov.names.nox %in% ov.num)
         } else {
             nvar[g] <- length(ov.names)
+            num.idx[[g]] <- which(ov.names %in% ov.num)
         }
-        num.idx[[g]] <- match(ov.num, ov.names.nox)
 
         # model matrices for this block
         mmNumber    <- attr(REP, "mmNumber")[[g]]

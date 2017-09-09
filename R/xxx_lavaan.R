@@ -230,10 +230,29 @@ lavaan <- function(# user-specified model: can be syntax, parameter Table, ...
     #######################
     if(!is.null(slotOptions)) {
         lavoptions <- slotOptions
+
+        # but what if other 'options' are given anyway (eg 'start = ')?
+        # give a warning!
+        if(length(dotdotdot) > 0L) {
+            dot.names <- names(dotdotdot)
+            op.idx <- which(dot.names %in% names(slotOptions))
+            warning("lavaan WARNING: the following argument(s) override(s) the options in slotOptions:\n\t\t", paste(dot.names[op.idx], collapse = " ")) 
+            lavoptions[ dot.names[op.idx] ] <- dotdotdot[ op.idx ]
+        }
     } else {
 
         # load default options
         opt <- lav_options_default()
+
+        # catch unknown options
+        ok.names <- names(opt)
+        dot.names <- names(dotdotdot)
+        wrong.idx <- which(!dot.names %in% ok.names)
+        if(length(wrong.idx) > 0L) {
+            idx <- wrong.idx[1L] # only show first one
+            # stop or warning?? stop for now (there could be more)
+            stop("lavaan ERROR: unknown argument `", dot.names[idx],"'")
+        }
 
         # modifyList
         opt <- modifyList(opt, dotdotdot)
@@ -315,14 +334,14 @@ lavaan <- function(# user-specified model: can be syntax, parameter Table, ...
             ov.types[ord.idx] <- "ordered"
         }
         # 0. at least some variables must be ordinal
-        if(!any(ov.types == "ordered")) {
-            stop("lavaan ERROR: estimator=\"PML\" is only available if some variables are ordinal")
-        }
+        #if(!any(ov.types == "ordered")) {
+        #    stop("lavaan ERROR: estimator=\"PML\" is only available if some variables are ordinal")
+        #}
         # 1. all variables must be ordinal (for now)
         #    (the mixed continuous/ordinal case will be added later)
-        if(any(ov.types != "ordered")) {
-            stop("lavaan ERROR: estimator=\"PML\" can not handle mixed continuous and ordinal data (yet)")
-        }
+        #if(any(ov.types != "ordered")) {
+        #    stop("lavaan ERROR: estimator=\"PML\" can not handle mixed continuous and ordinal data (yet)")
+        #}
 
         # 2. we can not handle exogenous covariates yet
         #if(length(ovx) > 0L) {
@@ -705,7 +724,7 @@ lavaan <- function(# user-specified model: can be syntax, parameter Table, ...
     } else {
         # prepare cache -- stuff needed for estimation, but also post-estimation
         lavcache <- vector("list", length=lavdata@ngroups)
-        if(lavoptions$estimator == "PML") {
+        if(lavoptions$estimator == "PML" && all(ov.types == "ordered")) {
             TH <- computeTH(lavmodel)
             BI <- lav_tables_pairwise_freq_cell(lavdata)
 

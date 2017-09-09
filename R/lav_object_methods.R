@@ -196,11 +196,15 @@ function(object, header       = TRUE,
                  estimates    = TRUE,
                  ci           = FALSE,
                  fmi          = FALSE,
+                 std          = FALSE,
                  standardized = FALSE,
                  rsquare      = FALSE,
                  std.nox      = FALSE,
                  modindices   = FALSE,
                  nd = 3L) {
+ 
+    # this is to avoid partial matching of 'std' with std.nox
+    standardized <- std || standardized
 
     if(std.nox) standardized <- TRUE
 
@@ -227,7 +231,8 @@ function(object, header       = TRUE,
                                  remove.ineq = FALSE, remove.def = FALSE,
                                  add.attributes = TRUE)
         if(standardized && std.nox) {
-            PE$std.all <- PE$std.nox
+            #PE$std.all <- PE$std.nox
+            PE$std.all <- NULL
         }
         print(PE, nd = nd)
     }
@@ -251,6 +256,8 @@ standardizedSolution <- standardizedsolution <- function(object,
                                                          se = TRUE,
                                                          zstat = TRUE,
                                                          pvalue = TRUE,
+                                                         ci = TRUE,
+                                                         level = 0.95,
                                                          remove.eq = TRUE,
                                                          remove.ineq = TRUE,
                                                          remove.def = FALSE,
@@ -329,6 +336,21 @@ standardizedSolution <- standardizedsolution <- function(object,
             }
         }
     }
+
+    # simple symmetric confidence interval
+    if(se && object@Options$se != "none" && ci) {
+        # next three lines based on confint.lm
+        a <- (1 - level)/2; a <- c(a, 1 - a)
+        if(object@Options$se != "bootstrap") {
+            fac <- qnorm(a)
+            ci <- LIST$est + LIST$se %o% fac
+        } else {
+            ci <- rep(as.numeric(NA), length(LIST$est)) + LIST$se %o% fac
+        }
+
+        LIST$ci.lower <- ci[,1]; LIST$ci.upper <- ci[,2]
+    }
+
 
     # if single group, remove group column
     if(object@Data@ngroups == 1L) LIST$group <- NULL
