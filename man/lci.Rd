@@ -7,7 +7,7 @@ lci(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
-              iterlim=25,reoptimize=FALSE)
+              iterlim=50,reoptimize=FALSE)
 }
 \arguments{
 \item{object}{An object of class \code{\linkS4class{lavaan}}.}

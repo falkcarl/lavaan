@@ -8,7 +8,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
-              iterlim=25,reoptimize=FALSE){
+              iterlim=50,reoptimize=FALSE){
 
   ## input checking
   if(!is.null(start)){
@@ -319,6 +319,7 @@ lci_nealemiller1997<-function(p, fitmodel, label, pindx, crit, bound=c("lower","
 
 lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("lower","upper"),
                      diff.method="default",lb=-Inf,ub=Inf){
+  ## FIXME: negative init would break things
   
   ## extract parameter table
   ptable<-parTable(fitmodel)
@@ -345,7 +346,7 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
   if(bound=="lower"){
     sign<- -1
   } else {
-    sign<-1    
+    sign<-1
   }
   p2<-est+sign*init*se
   
@@ -359,23 +360,37 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
 
   ## Try to find some value of the quantity of interest beyond which the
   ## difference test is significant
-  farbound.flag<-FALSE
   fariter<-0
-  while(!farbound.flag & fariter<iterlim){
+  inc1<-0
+  inc2<-1
+  inc3<-1.5
+  flag<-FALSE
+  while(fariter<iterlim){
     D2<-lci_diff_test(p2,fitmodel,label,diff.method=diff.method)
     # FIXME: a bit of troubleshooting if we end up with an NA value
+    # Assume this means the boundary is too far from the MLE?
+    # If so, actually try doing bisection here to troubleshoot
     if(is.na(D2)){
-      p2<-p2-sign*se*min(init,stats::rlnorm(1,0,.1))
-      init<-init-stats::rlnorm(1,0,.1)
+      flag<-TRUE # to indicate that an NA was encountered already
+      inc3<-inc2
+      inc2<-mean(c(inc1,inc3))
+      p2<-est+sign*init*se*inc2
     } else if (D2>crit) {
       break
-    } else if (p2==lb | p2==ub){
+    } else if (p2<=lb | p2>=ub){
       warning("LCI reached upper or lower boundary")
       # go ahead and return endpoint
-      return(list(est=p2,D=D2,iter=0))      
+      return(list(est=p2,D=D2,iter=0))
     } else {
-      init<-init+stats::rlnorm(1,0,.1)
-      p2<-est+sign*init*se
+      # if an NA was encountered before, proceed w/ bisection
+      if(flag){
+        inc1<-inc2
+        inc2<-mean(c(inc1,inc3))
+        p2<-est+sign*init*se*inc2
+      } else {
+        init<-init*1.1 # ad-hoc way of increasing upper boundary
+      }
+      p2<-est+sign*init*se*inc2
     }
     
     if(!is.null(lb)){
@@ -386,7 +401,6 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
     }
     fariter<-fariter+1
   }
-
   
   ## Start bisection
   ## Set up initial values
