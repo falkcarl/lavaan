@@ -41,7 +41,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   
   ## point estimate based on fitted model
   est<-ptable$est[pindx[1]]
-  ptable$ustart<-ptable$start<-ptable$est # not sure if necessary
+  #ptable$ustart<-ptable$start<-ptable$est # not sure if necessary
   if(is.null(start)){
     start<-est
   }
@@ -101,54 +101,22 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   ## If satorra.2000, obtain scaling constant before optimizing and adjust crit accordingly
   ## Then, estimate using normal theory ML
   if(diff.method[1]=="satorra.2000"){
-    prevmodel<-as.list(object@call)
-    f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
-    if(length(f)==1){
-      f<-f[1]
-    } else {
-      f<-get(f[2],asNamespace(f[1]))
-    }
-    constrow<-data.frame(id=max(ptable$id)+1,lhs=label,op="==",rhs=est,user=1,block=0,group=1,
-                         free=0,ustart=0,exo=0,label="",plabel="",start=0,est=0,se=0)
-    tmpptable<-rbind(ptable,constrow)
-    prevmodel$model<-tmpptable
-    M0<-try(do.call(f,prevmodel[-1]),silent=TRUE)
-    #M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
-    
+    const<-list()
+    const[[label]]<-est
+    M0<-lci_refit(object,const)
     # try again if not converged; apparently just rounding est can work
     if(!M0@Fit@converged){
-      prevmodel<-as.list(object@call)
-      est<-round(est,2)
-      constrow<-data.frame(id=max(ptable$id)+1,lhs=label,op="==",rhs=est,user=1,block=0,group=1,
-                           free=0,ustart=0,exo=0,label="",plabel="",start=0,est=0,se=0)
-      tmpptable<-rbind(ptable,constrow)
-      prevmodel$model<-tmpptable
-      M0<-try(do.call(f,prevmodel[-1]),silent=TRUE)
-      #M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
-      
+      const[[label]]<-round(est,2)
+      M0<-lci_refit(object,const)
     }
 
     chat<-lav_test_diff_Satorra2000(object, M0, A.method="exact")$scaling.factor
     crit<-chat*crit
 
-    prevmodel<-as.list(object@call)
-    prevmodel$model<-ptable
-    prevmodel$estimator<-"ML"
-    object<-try(do.call(f,prevmodel[-1]),silent=TRUE)
-    #object<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
-    
-    
+    object<-lci_refit(object,estimator="ML")
+
   } else {
-    prevmodel<-as.list(object@call)
-    prevmodel$model<-ptable
-    f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
-    if(length(f)==1){
-      f<-f[1]
-    } else {
-      f<-get(f[2],asNamespace(f[1]))
-    }
-    object<-try(do.call(f,prevmodel[-1]),silent=TRUE)
-    #object<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
+    object<-lci_refit(object)
   }
   
   ## Begin optimization
@@ -168,9 +136,9 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       }
       
       if(optimizer[1]=="Rsolnp"){
-        utils::capture.output(LCI<-try(Rsolnp::solnp(start,fitfunc,fitmodel=object,
+        LCI<-try(Rsolnp::solnp(start,fitfunc,fitmodel=object,
                       label=label, pindx=pindx, crit=crit, bound=b,
-                      diff.method=diff.method)))
+                      diff.method=diff.method,control=list(trace=0)))
 
         if(class(LCI)!="try-error"){
           D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method)
@@ -255,24 +223,13 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
 
 # Just computes constrains quantity in label to p and computes difference test for use with lci functions
 lci_diff_test<-function(p,fitmodel,label,diff.method="default"){
-  prevmodel<-as.list(fitmodel@call)
-  ptable<-parTable(fitmodel)
-  #f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
-  #if(length(f)==1){
-  #  f<-f[1]
-  #} else {
-  #  f<-get(f[2],asNamespace(f[1]))
-  #}  
-  for(j in 1:length(p)){
-    constrow<-data.frame(id=max(ptable$id)+1,lhs=label[j],op="==",rhs=p[j],user=1,block=0,group=1,
-                         free=0,ustart=0,exo=0,label="",plabel="",start=0,est=0,se=0)
-    ptable<-rbind(ptable,constrow)
+
+  const<-list()
+  for(i in 1:length(p)){
+    const[[label[i]]]<-p[i]
   }
-  prevmodel$model<-ptable
-  M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
-  #M0<-try(do.call(prevmodel[1][[1]],prevmodel[-1]),silent=TRUE)
-  #M0<-try(do.call("lavaan",prevmodel[-1]),silent=TRUE)
-  
+  M0<-lci_refit(fitmodel,const)
+
   if(class(M0)=="try-error"){
     return(NA)
   } else {
@@ -461,18 +418,9 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
 }
 
 profile_lci<-function(object,label,diff.method,grid){
-  prevmodel <- as.list(object@call)
-  ptable<-parTable(object)
-  prevmodel$model <- ptable
-  f <- strsplit(as.character(prevmodel[1]), "::")[[1]]
-  if (length(f) == 1) {
-    f <- f[1]
-  }
-  else {
-    f <- get(f[2], asNamespace(f[1]))
-  }
-  object <- try(do.call(f, prevmodel[-1]), silent = TRUE)
   
+  object<-lci_refit(object)
+
   D<-vector("numeric")
   for(j in 1:length(grid)){
     Dtmp<-try(lci_diff_test(grid[j],object,label,diff.method))
@@ -483,4 +431,44 @@ profile_lci<-function(object,label,diff.method,grid){
     }
   }
   return(D)
+}
+
+# utility function for re-fitting models w/ constraints or different estimator, etc.
+lci_refit<-function(object,const=NULL,estimator=NULL){
+  
+  # extract some info from fitted model
+  prevmodel<-as.list(object@call)
+  
+  # extract function used to fit model (e.g., cfa,lavaan,etc.)
+  f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
+  if(length(f)==1){
+    f<-f[1]
+  } else {
+    f<-get(f[2],asNamespace(f[1]))
+  }
+  
+  # parameter table
+  ptab<-parTable(object)
+  
+  # add constraints, if desired
+  if(!is.null(const)){
+    if(is.list(const)){
+      for(i in 1:length(const)){
+        ptab.row<-lavaanify(paste(names(const)[i],"==",const[i],sep=""))[1,]
+        ptab.row$plabel<-""
+        ptab<-lav_partable_merge(ptab, ptab.row)
+      }
+    } else {
+      stop("const should be a paired list of labels and numerical values")
+    }
+  }
+  
+  # change estimator, if desired
+  if(!is.null(estimator)){
+    prevmodel$estimator<-estimator
+  }
+  
+  prevmodel$model<-ptab
+  M<-try(do.call(f,prevmodel[-1]),silent=TRUE)
+  
 }
