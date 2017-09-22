@@ -234,7 +234,7 @@ lci_diff_test<-function(p,fitmodel,label,diff.method="default"){
     return(NA)
   } else {
     if(M0@Fit@converged){
-      D<-try(lavTestLRT(fitmodel,M0,method=diff.method)$`Chisq diff`[2])
+      D<-try(lavTestLRT(fitmodel,M0,method=diff.method,A.method="exact")$`Chisq diff`[2])
       if(class(D)!="try-error"){
         attr(D,"mod")<-M0
         return(D)
