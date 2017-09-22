@@ -417,7 +417,14 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
   
 }
 
-profile_lci<-function(object,label,diff.method,grid){
+lciProfile<-function(object,label,diff.method="default",grid=NULL){
+  
+  # if grid is empty, try to come up with something reasonable
+  if(is.null(grid)){
+    est<-coef(object)[label]
+    se<-sqrt(diag(vcov(object)))[label]
+    grid<-seq(est-se*2,est+se*2,length.out=101)
+  }
   
   object<-lci_refit(object)
 
@@ -430,7 +437,7 @@ profile_lci<-function(object,label,diff.method,grid){
       D<-c(D,NA)
     }
   }
-  return(D)
+  return(list(grid=grid,D=D))
 }
 
 # utility function for re-fitting models w/ constraints or different estimator, etc.
@@ -440,12 +447,13 @@ lci_refit<-function(object,const=NULL,estimator=NULL){
   prevmodel<-as.list(object@call)
   
   # extract function used to fit model (e.g., cfa,lavaan,etc.)
-  f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
-  if(length(f)==1){
-    f<-f[1]
-  } else {
-    f<-get(f[2],asNamespace(f[1]))
-  }
+  #f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
+  #if(length(f)==1){
+  #  f<-f[1]
+  #} else {
+  #  f<-get(f[2],asNamespace(f[1]))
+  #}
+  f<-"lavaan"
   
   # parameter table
   ptab<-parTable(object)
