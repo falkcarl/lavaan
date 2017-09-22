@@ -421,8 +421,9 @@ lciProfile<-function(object,label,diff.method="default",grid=NULL){
   
   # if grid is empty, try to come up with something reasonable
   if(is.null(grid)){
-    est<-coef(object)[label]
-    se<-sqrt(diag(vcov(object)))[label]
+    pest<-parameterEstimates(object)
+    est<-pest$est[pest$label==label][1]
+    se<-pest$se[pest$label==label][1]
     grid<-seq(est-se*2,est+se*2,length.out=101)
   }
   

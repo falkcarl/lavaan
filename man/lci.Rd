@@ -17,7 +17,7 @@ lci(object, label, level=.95, bound=c("lower","upper"),
 \item{optimizer}{This controls the optimizer used for finding upper and lower bounds, if an algorithm such as a modified version of that by Neale & Miller (1997) is employed. The default \code{"Rsolnp"} employs \code{\link[Rsolnp]{solnp}} to optimize. Other options for choice of optimizer include \code{"optim"} and \code{"nlminb"}, but may not consistently yield valid intervals.}
 \item{ci.method}{This option controls the algorithm used to find upper and lower bounds. The current version of this code implements two that have been tested and found to consistently provide valid intervals. \code{"NealeMiller1997"}, the default, corresponds to a modified version of Neale & Miller (1997) as detailed and studied by Falk (in press). \code{"bisect"} employs a bisection algorithm. Other faster or more accurate algorithms are possible (e.g., Wu & Neale, 2012), but have not yet been implemented due in part to difficulty in optimization.}
 \item{start}{ (Not yet supported). An optional vector used as starting values for the parameter(s) of interest, which could be different than those in the initially fitted model. Currently point estimates in the fitted model are used.}
-\item{diff.method}{Passed as the \code{"method"} argument to \code{\link{lavTestLRT}} to compute difference tests used to find CI boundaries.}
+\item{diff.method}{Passed as the \code{"method"} argument to \code{\link{lavTestLRT}} to compute difference tests used to find CI boundaries. If \code{"satorra.2000"} is specified, this function currently uses \code{A.method="exact"}.}
 \item{Dtol}{(Not yet supported). Tolerance level for difference test; if difference test at a boundary is not within this amount of the critical value, a future version of this function may print a warning, attempt re-optimization, or otherwise attempt to diagnose the problem.}
 \item{iterlim}{Number of iterations to perform if \code{"bisect"} is used as the estimation algorithm.}
 \item{reoptimize}{(Not yet supported). Future version of this code may attempt re-optimization if it appears that a proper upper/lower boundary is not found.}
@@ -42,10 +42,10 @@ A list possibly containing the following:
 \item{est}{A point estimate for the quantity of interest specified by \code{label}.}
 \item{crit}{Critical chi-square value of the difference test sought for the upper/lower boundaries.}
 \item{lower}{The lower CI boundary.}
-\item{convlower}{A convergence code returned by the optimizer at the lower CI boundary. 0 is expected if there were no major problems with optimization.}
+\item{convlower}{A convergence code returned by the optimizer at the lower CI boundary. 0 is expected if there were no major problems with optimization. If \code{method="bisect"}, the number of iterations used will be appear in this slot.}
 \item{Dlower}{Chi-square difference test actually obtained at the lower boundary.}
 \item{upper}{The upper CI boundary.}
-\item{convupper}{A convergence code returned by the optimizer at the upper CI boundary. 0 is expected if there were no major problems with optimization.}
+\item{convupper}{A convergence code returned by the optimizer at the upper CI boundary. 0 is expected if there were no major problems with optimization. If \code{method="bisect"}, the number of iterations used will be appear in this slot.}
 \item{Dupper}{Chi-square difference test actually obtained at the upper boundary.}
 
 }

@@ -8,7 +8,7 @@ lciProfile(object, label, diff.method="default",grid=NULL)
 \arguments{
 \item{object}{An object of class \code{\linkS4class{lavaan}}.}
 \item{label}{A string corresponding to a label for the parameter estimate or quantity computed with the \code{":="} operator (e.g., see \code{\link{model.syntax}}). Valid labels for the current model can be inspected using \code{\link{parTable}}.}
-\item{diff.method}{Passed as the \code{"method"} argument to \code{\link{lavTestLRT}} to compute difference test.}
+\item{diff.method}{Passed as the \code{"method"} argument to \code{\link{lavTestLRT}} to compute difference test. If \code{"satorra.2000"} is specified, this function currently uses \code{A.method="exact"}.}
 \item{grid}{An optional vector indicating at what values the parameter (or function of model parameters) should be constrained for the purposes of computing the difference test. If NULL, plus and minus 2 standard deviations from the estimate will be used.}
 }
 \author{Carl F. Falk}
@@ -38,24 +38,32 @@ HS.model <- ' visual  =~ x1 + l2*x2 + x3
               lam1 := 1/sqrt(1^2*vVis + psi1)*sqrt(vVis)
               lam2 := l2/sqrt(l2^2*vVis + psi2)*sqrt(vVis)'
 
-# Normal theory
+# Fit model using normal theory ML
 fit <- cfa(HS.model, data=HolzingerSwineford1939, se="standard")
 
-test<-lciProfile(fit,"l2")
+# Plot profile of difference test
+test<-lciProfile(fit,"lam2")
 plot(test$grid,test$D,type="l",ylab="Difference Test",xlab="Parameter Value")
 
 # "Robust"
 fit.robust <- cfa(HS.model, data=HolzingerSwineford1939, se="standard",
   estimator="MLM", meanstructure=TRUE)
 
-grid<-seq(0,.812)
-testS2000<-lciProfile(fit,"l2",diff.method="satorra.2000",grid=grid)
+# Obtain and plot profiles of difference test
+
+# Set up grid
+grid<-seq(0.25,.6,length.out=101)
+
+# Satorra (2000)
+testS2000<-lciProfile(fit.robust,"lam2",diff.method="satorra.2000",grid=grid)
 plot(testS2000$grid,testS2000$D,type="l",ylab="Difference Test",xlab="Parameter Value")
 
-testSB2001<-lciProfile(fit,"l2",diff.method="satorra.bentler.2001",grid=grid)
+# Satorra & Bentler (2001)
+testSB2001<-lciProfile(fit.robust,"lam2",diff.method="satorra.bentler.2001",grid=grid)
 lines(testSB2001$grid,testSB2001$D,lty=2)
 
-testSB2010<-lciProfile(fit,"l2",diff.method="satorra.bentler.2010",grid=grid)
+# Satorra & Bentler (2010)
+testSB2010<-lciProfile(fit.robust,"lam2",diff.method="satorra.bentler.2010",grid=grid)
 lines(testSB2010$grid,testSB2010$D,lty=3)
 
 }
