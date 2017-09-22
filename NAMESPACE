@@ -85,6 +85,7 @@ export("lavaan", "cfa", "sem", "growth",
        "lavPredict",
        "lavCor",
        "lci",
+       "lciProfile",
 
        # API functions
 
