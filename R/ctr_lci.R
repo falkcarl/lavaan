@@ -189,7 +189,6 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       }
       
     } else if (ci.method[1]=="bisect"){
-      set.seed(1234)
       if(diff.method[1]=="satorra.2000"){
         diff.method<-"default"
       }
