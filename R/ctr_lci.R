@@ -11,14 +11,14 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
               iterlim=50,reoptimize=FALSE){
 
   ## input checking
+  if(class(object)!="lavaan"){
+    stop("object must be a fitted lavaan model")
+  }
   if(!is.null(start)){
     stop("Custom starting values not yet supported")
   }
   if(reoptimize){
     stop("Re-optimization is not yet supported")
-  }
-  if(class(object)!="lavaan"){
-    stop("object must be a fitted lavaan model")
   }
   if(level <=0 | level >=1){
     stop("level must be between 0 and 1")
@@ -192,7 +192,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       if(diff.method[1]=="satorra.2000"){
         diff.method<-"default"
       }
-      LCI<-lci_bisect(object,label,crit, bound=b,diff.method=diff.method[1],iterlim=iterlim)
+      LCI<-lci_bisect(object,label,crit,bound=b,diff.method=diff.method[1],iterlim=iterlim)
       if(class(LCI)!="try-error"){
         D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method)
         attr(D,"mod")<-NULL        
@@ -273,7 +273,7 @@ lci_nealemiller1997<-function(p, fitmodel, label, pindx, crit, bound=c("lower","
   return(fit)
 }
 
-lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("lower","upper"),
+lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("lower","upper"),
                      diff.method="default",lb=-Inf,ub=Inf){
   ## FIXME: negative init would break things
   
@@ -296,8 +296,8 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
   ## standard error
   se<-ptable$se[pindx[1]]
   
-  ## First part - find out two points - between which is the boundary
-  # starting points are function of point estimate and multiplier w/ se  
+  ## Find two points - between which is the boundary
+  ## Starting points are function of point estimate and multiplier w/ se  
   p0<-est
   if(bound=="lower"){
     sign<- -1
@@ -418,11 +418,28 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=25,init=2,bound=c("low
 
 lciProfile<-function(object,label,diff.method="default",grid=NULL){
   
+  if(class(object)!="lavaan"){
+    stop("object must be a fitted lavaan model")
+  }
+  
+  ## extract parameter table
+  ptable<-parTable(object)
+  
+  ## Look for parameter label
+  pindx<-which(ptable$label==label)
+  
+  if(length(pindx)<1){
+    stop("Parameter label not found in lavaan parameter table.")
+  } else if(length(pindx)>1){
+    warning("FIXME: More than one parameter label match")
+  }
+  
   # if grid is empty, try to come up with something reasonable
   if(is.null(grid)){
-    pest<-parameterEstimates(object)
-    est<-pest$est[pest$label==label][1]
-    se<-pest$se[pest$label==label][1]
+    est<-ptable$est[pindx][1]
+    se<-try(ptable$se[pindx][1])
+    if(object@Options$se=="none"|class(se)=="try-error"|is.na(se))
+      stop("If grid is not specified, standard errors must be available for the fitted model to determine range of x-axis values.")
     grid<-seq(est-se*2,est+se*2,length.out=101)
   }
   
