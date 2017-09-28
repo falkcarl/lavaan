@@ -111,11 +111,12 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     }
 
     chat<-lav_test_diff_Satorra2000(object, M0, A.method="exact")$scaling.factor
-    crit<-chat*crit
+    #crit<-chat*crit
 
     object<-lci_refit(object,estimator="ML")
 
   } else {
+    chat<-1
     object<-lci_refit(object)
   }
   
@@ -138,10 +139,10 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       if(optimizer[1]=="Rsolnp"){
         LCI<-try(Rsolnp::solnp(start,fitfunc,fitmodel=object,
                       label=label, pindx=pindx, crit=crit, bound=b,
-                      diff.method=diff.method,control=list(trace=0)))
+                      diff.method=diff.method,chat=chat,control=list(trace=0)))
 
         if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method)
+          D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method,chat=chat)
           est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL
           conv<-LCI$convergence
@@ -151,9 +152,9 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       } else if (optimizer[1]=="optim"){
         LCI<-try(optim(start, fitfunc,fitmodel=object,
                       label=label, pindx=pindx, crit=crit, bound=b,
-                      diff.method=diff.method,method="BFGS"))
+                      diff.method=diff.method,chat=chat,method="BFGS"))
         if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method)
+          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
           est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL          
           conv<-LCI$convergence
@@ -163,9 +164,9 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       } else if (optimizer[1]=="nlminb"){
         LCI<-try(nlminb(start, fitfunc,fitmodel=object,
                       label=label, pindx=pindx, crit=crit, bound=b,
-                      diff.method=diff.method))
+                      diff.method=diff.method,chat=chat))
         if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method)
+          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
           est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
           attr(D,"mod")<-NULL
           conv<-LCI$convergence
@@ -180,7 +181,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       eqfun<-lci_diff_test
 
       if(class(LCI)!="try-error"){
-        D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method)
+        D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
         attr(D,"mod")<-NULL
         conv<-LCI$convergence
@@ -192,9 +193,9 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       if(diff.method[1]=="satorra.2000"){
         diff.method<-"default"
       }
-      LCI<-lci_bisect(object,label,crit,bound=b,diff.method=diff.method[1],iterlim=iterlim)
+      LCI<-lci_bisect(object,label,crit,bound=b,diff.method=diff.method[1],iterlim=iterlim,chat=chat)
       if(class(LCI)!="try-error"){
-        D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method)
+        D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
         attr(D,"mod")<-NULL        
         est.bound<-LCI$est
         conv<-LCI$iter
@@ -208,12 +209,12 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     if(b=="upper"){
       result$upper<-est.bound
       result$convupper<-conv
-      result$Dupper<-(result$crit/crit)*D
+      result$Dupper<-D
     }
     if(b=="lower"){
       result$lower<-est.bound
       result$convlower<-conv
-      result$Dlower<-(result$crit/crit)*D
+      result$Dlower<-D
     }
   }
   
@@ -221,7 +222,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
 }
 
 # Just computes constrains quantity in label to p and computes difference test for use with lci functions
-lci_diff_test<-function(p,fitmodel,label,diff.method="default"){
+lci_diff_test<-function(p,fitmodel,label,diff.method="default",chat=1){
 
   const<-list()
   for(i in 1:length(p)){
@@ -235,6 +236,7 @@ lci_diff_test<-function(p,fitmodel,label,diff.method="default"){
     if(M0@Fit@converged){
       D<-try(lavTestLRT(fitmodel,M0,method=diff.method,A.method="exact")$`Chisq diff`[2])
       if(class(D)!="try-error"){
+        D<-D/chat
         attr(D,"mod")<-M0
         return(D)
       } else {
@@ -250,9 +252,9 @@ lci_diff_test<-function(p,fitmodel,label,diff.method="default"){
 ## Differs from original in that the function only takes input for the parmeter (or function of paramters) of interest
 ## and allows lavaan to fully optimize with each function evaluation
 lci_nealemiller1997<-function(p, fitmodel, label, pindx, crit, bound=c("lower","upper"),
-                              diff.method="default"){
+                              diff.method="default",chat=1){
   
-  D<-lci_diff_test(p,fitmodel,label,diff.method)
+  D<-lci_diff_test(p,fitmodel,label,diff.method,chat=chat)
   if(!is.na(D)){
     fit<-(D-crit)^2
   
@@ -274,7 +276,7 @@ lci_nealemiller1997<-function(p, fitmodel, label, pindx, crit, bound=c("lower","
 }
 
 lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("lower","upper"),
-                     diff.method="default",lb=-Inf,ub=Inf){
+                     diff.method="default",lb=-Inf,ub=Inf,chat=1){
   ## FIXME: negative init would break things
   
   ## extract parameter table
@@ -322,7 +324,7 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("low
   inc3<-1.5
   flag<-FALSE
   while(fariter<iterlim){
-    D2<-lci_diff_test(p2,fitmodel,label,diff.method=diff.method)
+    D2<-lci_diff_test(p2,fitmodel,label,diff.method=diff.method,chat=chat)
     # FIXME: a bit of troubleshooting if we end up with an NA value
     # Assume this means the boundary is too far from the MLE?
     # If so, actually try doing bisection here to troubleshoot
@@ -366,9 +368,9 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("low
   ## starting point (MLE or closest to it)
   ## middle point
   ## farthest point from MLE
-  D0<-lci_diff_test(p0,fitmodel,label,diff.method=diff.method)
-  D1<-lci_diff_test(p1,fitmodel,label,diff.method=diff.method)
-  D2<-lci_diff_test(p2,fitmodel,label,diff.method=diff.method)  
+  D0<-lci_diff_test(p0,fitmodel,label,diff.method=diff.method,chat=chat)
+  D1<-lci_diff_test(p1,fitmodel,label,diff.method=diff.method,chat=chat)
+  D2<-lci_diff_test(p2,fitmodel,label,diff.method=diff.method,chat=chat)  
   count<-1
   flag<-FALSE
   while(!flag){
@@ -403,7 +405,7 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("low
       }      
       
       ## check for convergence
-      D1<-lci_diff_test(p1,fitmodel,label,diff.method=diff.method)
+      D1<-lci_diff_test(p1,fitmodel,label,diff.method=diff.method,chat=chat)
       if(abs(D1-crit)<tol){
         flag<-TRUE
       }
