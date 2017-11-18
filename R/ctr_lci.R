@@ -1,6 +1,4 @@
 ## Author: Carl F. Falk
-## First version assumed no access to internal lavaan functions.
-## A re-write could make this more efficient.
 ##
 ## General purpose likelihood-based confidence interval function using lavaan
 ## Requires that the parameter or quantity of interest is clearly labeled in the parameter table 
@@ -8,50 +6,25 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
-              iterlim=50,reoptimize=FALSE){
+              reoptimize=TRUE,
+              iterlim=50,control=list()){
 
   ## input checking
   if(class(object)!="lavaan"){
-    stop("object must be a fitted lavaan model")
+    stop("Object must be a fitted lavaan model")
   }
-  if(!is.null(start)){
-    stop("Custom starting values not yet supported")
-  }
-  if(reoptimize){
-    stop("Re-optimization is not yet supported")
+  if(!is.null(start)&length(bound)>1){
+    stop("Custom starting values only supported when obtaining one boundary at a time. Use 'lower' or 'upper' for the bound argument, not both.")
   }
   if(level <=0 | level >=1){
     stop("level must be between 0 and 1")
   }
-  if(ci.method=="bisect" & object@Options$se=="none"){
-    stop("Bisection method currently relies in part on standard errors to aid in determining where to start the algorithm. Change se='none' to something else.")
+  if(ci.method=="bisect" & object@Options$se=="none" & is.null(start)){
+    stop("Bisection requires either standard errors to aid in determining where to start the algorithm (change se='none' to something else) or a custom start value.")
   }
-  
-  ## extract parameter table
-  ptable<-parTable(object)
-
-  ## Look for parameter label
-  pindx<-which(ptable$label==label)
-  
-  if(length(pindx)<1){
-    stop("Parameter label not found in lavaan parameter table.")
-  } else if(length(pindx)>1){
-    warning("FIXME: More than one parameter label match")
+  if(!ci.method %in% c("NealeMiller1997","bisect")){
+    stop("Unsupported CI estimation method.")
   }
-  
-  ## point estimate based on fitted model
-  est<-ptable$est[pindx[1]]
-  #ptable$ustart<-ptable$start<-ptable$est # not sure if necessary
-  if(is.null(start)){
-    start<-est
-  }
-  
-  ## Start list of output before embarking on optimization
-  result<-list()
-  result$est<-est
-    
-  crit<-qchisq(level,1) ## hardcoded 1 df for now
-  result$crit<-crit
   
   ## Check whether test is satorra.2000
   ## Code borrowed directly from lavTestLRT function
@@ -98,6 +71,21 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     }
   }
   
+  ## extract parameter table
+  ptable<-parTable(object)
+  
+  ## Look for parameter label
+  pindx<-which(ptable$label==label)
+  
+  if(length(pindx)<1){
+    stop("Parameter label not found in lavaan parameter table.")
+  } else if(length(pindx)>1){
+    warning("FIXME: More than one parameter label match")
+  }
+  
+  ## point estimate based on fitted model
+  est<-ptable$est[pindx[1]]
+  
   ## If satorra.2000, obtain scaling constant before optimizing and adjust crit accordingly
   ## Then, estimate using normal theory ML
   if(diff.method[1]=="satorra.2000"){
@@ -109,77 +97,143 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       const[[label]]<-round(est,2)
       M0<-lci_refit(object,const)
     }
-
+    
     chat<-lav_test_diff_Satorra2000(object, M0, A.method="exact")$scaling.factor
     #crit<-chat*crit
-
-    object<-lci_refit(object,estimator="ML")
-
+    
+    fit<-lci_refit(object,estimator="ML")
+    
   } else {
     chat<-1
-    object<-lci_refit(object)
+    fit<-lci_refit(object)
   }
   
-  ## Begin optimization
+  ## Start list of output before embarking on optimization
+  result<-list()
+  result$est<-est
+  
+  ## Prepare critical value of chi-square
+  crit<-qchisq(level,1) ## hardcoded 1 df for now
+  result$crit<-crit
+  
+  # Begin optimization for each bound
   for(b in bound){
-    D<-NULL
-    cont<-NULL
-    est.bound<-NULL
-    if(ci.method[1]=="NealeMiller1997"){
-      fitfunc<-lci_nealemiller1997
+    
+    LCI<-lci_internal(fit, label, est, ptable, pindx,
+                      crit, b, chat, optimizer, ci.method,
+                      start,diff.method, Dtol, iterlim, control)
+    
+    # Troubleshoot any problems
+    if(LCI$bound<=result$est & b=="upper" | LCI$bound>=result$est & b=="lower"){
+      warning("CI boundary on wrong side of estimate ", b)
+      if(reoptimize & ci.method=="NealeMiller1997"){
+        warning("Attempting to re-optimize by moving starting values")
 
-      if(ptable$op[pindx]==":=" & (diff.method[1]=="satorra.2000"|estimator=="ML")){
-        label<-all.vars(parse(file="", text=ptable$rhs[pindx]))
-        if(length(start)!=length(label)){
-          start<-ptable$est[match(label,ptable$label)]
+        # Obtain SE
+        #pest<-parameterEstimates(object)
+        se<-ptable$se[pindx[1]]
+        
+        # Obtain new starting model with function of interest moved slightly towards boundary
+        newstart<-ifelse(b=="upper", est+.25*se,est-.25*se)
+        
+        # Make necessary adjustments to start values in case of function of model parameters
+        if(ptable$op[pindx]==":=" & (diff.method[1]=="satorra.2000"|object@Options$estimator=="ML"& !diff.method[1] %in% c("satorra.bentler.2010","satorra.bentler.2001"))){
+          const<-list()
+          const[[label]]<-newstart
+          tmp<-lci_refit(fit,const)
+          ptabtmp<-parTable(tmp)
+          tmplabel<-all.vars(parse(file="", text=ptabtmp$rhs[pindx]))
+          newstart<-ptabtmp$est[match(tmplabel,ptabtmp$label)]
         }
-        diff.method<-"default"
+        
+        # Call lci_internal again with start replaced by newstart
+        LCI<-lci_internal(fit, label, est, ptable, pindx,
+                          crit, b, chat, optimizer, ci.method,
+                          newstart,diff.method, Dtol, iterlim, control)
       }
+    } else if (abs(LCI$D-crit)>Dtol) {
+      warning("Tolerance level for chi-square difference test not met for CI boundary ", b,".
+                An obtained difference test at the CI boundary might not be close to the desired critical value")
+      if(reoptimize & ci.method=="NealeMiller1997"){
+        warning("Attempting to re-optimize by bisection")
+        
+        # Change start value depending on obtained D
+        if(LCI$D>crit) {
+          
+          # Obtain current boundary and start bisection there
+          newstart<-LCI$best
+          
+        } else if (LCI$D<crit){
+          # Unlikely. If there is bias, usually we miss with a D that is too high
+          # Could be a sign that no boundary can be found due to insufficient information
+          
+          # Obtain standard errors
+          #pest<-parameterEstimates(object)
+          se<-ptable$se[pindx[1]]
+          
+          # Adjust newstart
+          newstart<-ifelse(b=="upper", newstart+.5*se,newstart-.5*se)
+        }
+        
+        # Call lci_internal via bisection
+        LCI<-lci_internal(fit, label, est, ptable, pindx,
+                          crit, b, chat, optimizer, "bisect",
+                          newstart,diff.method, Dtol, iterlim, control)
+      }
+    }
+    
+    # Save results
+    if(b=="upper"){
+      result$upper<-LCI$bound
+      result$convupper<-LCI$conv
+      result$Dupper<-LCI$D
+    }
+    if(b=="lower"){
+      result$lower<-LCI$bound
+      result$convlower<-LCI$conv
+      result$Dlower<-LCI$D
+    }
+  }
+  return(result)
+}
+
+lci_internal<-function(object, label, est, ptable,
+                       pindx, crit, bound, chat,
+                       optimizer="Rsolnp",
+                       ci.method="NealeMiller1997",
+                       start=NULL,diff.method="default",Dtol=.05,
+                       iterlim=50,control=list()){
+  
+  ret<-list()
+  D<-NULL
+  cont<-NULL
+  est.bound<-NULL
+  if(ci.method[1]=="NealeMiller1997"){
+    fitfunc<-lci_nealemiller1997
+    
+    if(ptable$op[pindx]==":=" & (diff.method[1]=="satorra.2000"|object@Options$estimator=="ML"& !diff.method[1] %in% c("satorra.bentler.2010","satorra.bentler.2001"))){
+      label<-all.vars(parse(file="", text=ptable$rhs[pindx]))
+      if(length(start)!=length(label)&!is.null(start)){
+        warning("Number of starting values did not match number of parameters in quantity of interest. See documentation for \"start\" argument.")
+      }
+      if(length(start)!=length(label)){
+        start<-ptable$est[match(label,ptable$label)]
+      }
+      diff.method<-"default"
+    } else {
+      if(is.null(start)){
+        start<-est
+      }
+    }
+    
+    if(optimizer[1]=="Rsolnp"){
+      if(is.null(control$trace)){
+        control$trace<-0
+      }
+      LCI<-suppressWarnings(try(Rsolnp::solnp(start,fitfunc,fitmodel=object,
+                                              label=label, pindx=pindx, crit=crit, bound=bound,
+                                              diff.method=diff.method,chat=chat,control=control)))
       
-      if(optimizer[1]=="Rsolnp"){
-        LCI<-try(Rsolnp::solnp(start,fitfunc,fitmodel=object,
-                      label=label, pindx=pindx, crit=crit, bound=b,
-                      diff.method=diff.method,chat=chat,control=list(trace=0)))
-
-        if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method,chat=chat)
-          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
-          attr(D,"mod")<-NULL
-          conv<-LCI$convergence
-        } else{
-          est.bound<-NA
-        }
-      } else if (optimizer[1]=="optim"){
-        LCI<-try(optim(start, fitfunc,fitmodel=object,
-                      label=label, pindx=pindx, crit=crit, bound=b,
-                      diff.method=diff.method,chat=chat,method="BFGS"))
-        if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
-          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
-          attr(D,"mod")<-NULL          
-          conv<-LCI$convergence
-        } else{
-          est.bound<-NA
-        }
-      } else if (optimizer[1]=="nlminb"){
-        LCI<-try(nlminb(start, fitfunc,fitmodel=object,
-                      label=label, pindx=pindx, crit=crit, bound=b,
-                      diff.method=diff.method,chat=chat))
-        if(class(LCI)!="try-error"){
-          D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
-          est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
-          attr(D,"mod")<-NULL
-          conv<-LCI$convergence
-        } else{
-          p.est.bound<-NA
-        }
-      } else {
-        stop("Unsupported optimizer")
-      }
-    } else if (ci.method[1]=="WuNeale2012" & optimizer[1]=="Rsolnp"){
-      stop("Wu and Neale is not yet supported")
-      eqfun<-lci_diff_test
-
       if(class(LCI)!="try-error"){
         D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
@@ -188,37 +242,57 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       } else{
         est.bound<-NA
       }
-      
-    } else if (ci.method[1]=="bisect"){
-      if(diff.method[1]=="satorra.2000"){
-        diff.method<-"default"
-      }
-      LCI<-lci_bisect(object,label,crit,bound=b,diff.method=diff.method[1],iterlim=iterlim,chat=chat)
+    } else if (optimizer[1]=="optim"){
+      LCI<-suppressWarnings(try(optim(start, fitfunc,fitmodel=object,
+                                      label=label, pindx=pindx, crit=crit, bound=bound,
+                                      diff.method=diff.method,chat=chat,method="BFGS",control=control)))
       if(class(LCI)!="try-error"){
-        D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
-        attr(D,"mod")<-NULL        
-        est.bound<-LCI$est
-        conv<-LCI$iter
+        D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
+        est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
+        attr(D,"mod")<-NULL          
+        conv<-LCI$convergence
+      } else{
+        est.bound<-NA
+      }
+    } else if (optimizer[1]=="nlminb"){
+      LCI<-suppressWarnings(try(nlminb(start, fitfunc,fitmodel=object,
+                                       label=label, pindx=pindx, crit=crit, bound=bound,
+                                       diff.method=diff.method,chat=chat,control=control)))
+      if(class(LCI)!="try-error"){
+        D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
+        est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
+        attr(D,"mod")<-NULL
+        conv<-LCI$convergence
       } else{
         est.bound<-NA
       }
     } else {
-      stop("Unsupported ci.type and/or optimizer")
+      stop("Unsupported optimizer")
     }
-    
-    if(b=="upper"){
-      result$upper<-est.bound
-      result$convupper<-conv
-      result$Dupper<-D
+  } else if (ci.method[1]=="bisect"){
+    if(diff.method[1]=="satorra.2000"){
+      diff.method<-"default"
     }
-    if(b=="lower"){
-      result$lower<-est.bound
-      result$convlower<-conv
-      result$Dlower<-D
+    LCI<-suppressWarnings(lci_bisect(object,label,crit,tol=Dtol*.002,bound=bound,
+                                     diff.method=diff.method,iterlim=iterlim,
+                                     chat=chat,start=start))
+    if(class(LCI)!="try-error"){
+      D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
+      attr(D,"mod")<-NULL
+      est.bound<-LCI$est
+      conv<-LCI$iter
+    } else{
+      est.bound<-NA
     }
+  } else {
+    stop("Unsupported ci.type and/or optimizer")
   }
   
-  return(result)
+  ret$bound<-est.bound
+  ret$conv<-conv
+  ret$D<-D
+  
+  return(ret)
 }
 
 # Just computes constrains quantity in label to p and computes difference test for use with lci functions
@@ -276,8 +350,10 @@ lci_nealemiller1997<-function(p, fitmodel, label, pindx, crit, bound=c("lower","
 }
 
 lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("lower","upper"),
-                     diff.method="default",lb=-Inf,ub=Inf,chat=1){
-  ## FIXME: negative init would break things
+                     diff.method="default",lb=-Inf,ub=Inf,chat=1,start=NULL){
+  ## FIXME: init<1 might break things
+  ## FIXME: ub and lb aren't available to user
+  ## FIXME: tol and init also not available to user
   
   ## extract parameter table
   ptable<-parTable(fitmodel)
@@ -291,22 +367,30 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("low
   
   ## point estimate based on fitted model
   est<-ptable$est[pindx[1]]
-  if(is.null(start)){
-    start<-est
-  }
-  
   ## standard error
   se<-ptable$se[pindx[1]]
   
-  ## Find two points - between which is the boundary
-  ## Starting points are function of point estimate and multiplier w/ se  
+  ## p0 is at the MLE
+  ## We need to find p2, which is a point at which the difference test is significant
   p0<-est
   if(bound=="lower"){
     sign<- -1
   } else {
     sign<-1
   }
-  p2<-est+sign*init*se
+  
+  if(!is.null(start)){
+    ## Custom p2
+    if((start<est & bound=="upper")|(start>est & bound=="lower")){
+      stop("Custom starting value for bisection on wrong side of estimate.") 
+    }
+    
+    p2<-start
+    
+  } else {
+    ## Guess a starting point for p2 based on point estimate and multiplier w/ se
+    p2<-est+sign*init*se
+  }
   
   ## enforce hard boundaries
   if(!is.null(lb)){
@@ -316,16 +400,15 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("low
     p2[p2>ub]<-ub
   }
 
-  ## Try to find some value of the quantity of interest beyond which the
-  ## difference test is significant
+  ## Try p2 and troubleshoot as necessary
   fariter<-0
   inc1<-0
-  inc2<-1
-  inc3<-1.5
+  inc2<-ifelse(is.null(start),1,(start-est)/(sign*init*se))
+  inc3<-ifelse(is.null(start),1.5,1.5*(start-est)/(sign*init*se))
   flag<-FALSE
   while(fariter<iterlim){
     D2<-lci_diff_test(p2,fitmodel,label,diff.method=diff.method,chat=chat)
-    # FIXME: a bit of troubleshooting if we end up with an NA value
+    # A bit of troubleshooting if we end up with an NA value
     # Assume this means the boundary is too far from the MLE?
     # If so, actually try doing bisection here to troubleshoot
     if(is.na(D2)){
@@ -497,5 +580,7 @@ lci_refit<-function(object,const=NULL,estimator=NULL){
   
   prevmodel$model<-ptab
   M<-try(do.call(f,prevmodel[-1]),silent=TRUE)
+  
+  return(M)
   
 }
