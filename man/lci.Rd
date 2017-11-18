@@ -8,7 +8,8 @@ lci(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
-              iterlim=50,reoptimize=FALSE)
+              reoptimize=TRUE,
+              iterlim=50,control=list())
 lciProfile(object, label, diff.method="default",grid=NULL)
 }
 \arguments{
@@ -16,27 +17,28 @@ lciProfile(object, label, diff.method="default",grid=NULL)
 \item{label}{A string corresponding to a user-specified label for the parameter estimate or quantity computed with the \code{":="} operator (e.g., see \code{\link{model.syntax}}). Valid labels for the current model can be inspected using \code{\link{parTable}} and examining the \code{label} column. Support for other types of labels is not yet available.}
 \item{level}{Confidence level required (e.g., .95 for 95\% CI).}
 \item{bound}{\code{"lower"} for lower bound, \code{"upper"} for upper bound, or \code{c("lower","upper")} for both.}
-\item{optimizer}{This controls the optimizer used for finding upper and lower bounds, if an algorithm such as a modified version of that by Neale & Miller (1997) is employed. The default \code{"Rsolnp"} employs \code{\link[Rsolnp]{solnp}} to optimize. Other options for choice of optimizer include \code{"optim"} and \code{"nlminb"}, but may not consistently yield valid intervals.}
+\item{optimizer}{This controls the optimizer used for finding upper and lower bounds, if an algorithm such as a modified version of that by Neale & Miller (1997) is employed. The default \code{"Rsolnp"} employs \code{\link[Rsolnp]{solnp}} to optimize. Other options for choice of optimizer include \code{"\link{optim}"} and \code{"\link{nlminb}"}, but may not consistently yield valid intervals.}
 \item{ci.method}{This option controls the algorithm used to find upper and lower bounds. The current version of this code implements two that have been tested and found to consistently provide valid intervals. \code{"NealeMiller1997"}, the default, corresponds to a modified version of Neale & Miller (1997) as detailed and studied by Falk (in press). \code{"bisect"} employs a bisection algorithm. Other faster or more accurate algorithms are possible (e.g., Wu & Neale, 2012), but have not yet been implemented due in part to difficulty in optimization.}
-\item{start}{ (Not yet supported). An optional vector used as starting values for the parameter(s) of interest, which could be different than those in the initially fitted model. Currently point estimates in the fitted model are used.}
+\item{start}{ (Experimental). Works only when doing optimization for a single bound (upper or lower; see \code{bound} argument). For \code{ci.method="NealeMiller1997"}, an optional scalar or vector used as starting values for the quantity of interest. Otherwise, point estimates in the fitted model are default. For functions of model parameters and \code{estimator="ML"} or when using \code{diff.method="satorra.2000"}, this should be a vector corresponding to all parameters in the function defined with ":=", and in their order of appearance in the function definition. When \code{ci.method="bisect"}, \code{start} should be a scalar value, and is used as an initial guess for a value of the quantity at which the a chi-square difference test will be significant (i.e., a point beyond the CI boundary to determine where to start the bisection algorithm).}
 \item{diff.method}{Passed as the \code{"method"} argument to \code{\link{lavTestLRT}} to compute difference tests used to find CI boundaries. If \code{"satorra.2000"} is specified, this function currently uses \code{A.method="exact"}.}
-\item{Dtol}{(Not yet supported). Tolerance level for difference test; if difference test at a boundary is not within this amount of the critical value, a future version of this function may print a warning, attempt re-optimization, or otherwise attempt to diagnose the problem.}
+\item{Dtol}{(Experimental). Tolerance level for difference test; if difference test at a boundary is not within this amount of the critical value, a warning is printed. A future version of this function may attempt re-optimization when \code{ci.method="NealeMiller1997"} or otherwise attempt to diagnose the problem. When \code{ci.method="bisect"}, \code{Dtol*.002} is actually used to determine when to terminate the algorithm.}
 \item{iterlim}{Number of iterations to perform if \code{"bisect"} is used as the estimation algorithm.}
-\item{reoptimize}{(Not yet supported). Future version of this code may attempt re-optimization if it appears that a proper upper/lower boundary is not found.}
+\item{reoptimize}{(Experimental). For use with \code{ci.method="NealeMiller1998"}. If tolerance criterion in Dtol is not met or CI is on wrong side of point estimate, attempts to re-optimize by moving starting values and/or obtain a boundary with better tolerance by using bisection.}
+\item{control}{An optional list to be passed to optmizers (\code{solnp}, \code{optim}, \code{nlminb}). Note that these options are passed to optimizers that find LCI boundaries and are not further passed to \code{lavaan} for use in optimization of individual models. However, if the initially fitted model specified in \code{object} had such optimization options, these are retained when \code{lavaan} performs model fitting.}
 \item{grid}{An optional vector for use with \code{lciProfile} indicating at what values the parameter (or function of model parameters) should be constrained for the purposes of computing the difference test. If NULL, plus and minus 2 standard deviations from the estimate will be used.}
 }
 \author{Carl F. Falk}
 \details{Likelihood-based confidence intervals (LCIs; e.g., Neale & Miller, 1997; Pek & Wu, 2015) are asymptotically equivalent to the Wald-based intervals (based on standard errors of parameter estimates) that can be generated by \code{\link{parameterEstimates}}. LCIs, may yield more accurate coverage rates in finite samples, especially for parameters or functions of parameters whose sampling distributions are slow to approach normality. LCIs are based on inverting likelihood ratio tests (colloquially referred to as chi-square difference tests) used in model comparisons. That is, the lower/upper boundaries of LCIs are the point at which a likelihood ratio test would become significant. LCIs are also more computationally intensive than Wald-based intervals and the speed/accuracy of such algorithms is a topic of current research (Pek & Wu, 2015).
 
-The \code{lci} function is an initial implementation of LCIs for \code{lavaan} and is subject to change. Although every effort has been made to ensure that this function performs as expected, bug reports and additional suggestions for improvement are encouraged. Note that warnings are common and expected as the optimizer may try values for the quantity of interest that may cause difficulty by \code{lavaan}. These are not yet suppressed by the current version of this code.
+The \code{lci} function is an initial implementation of LCIs for \code{lavaan} and is subject to change. Although every effort has been made to ensure that this function performs as expected, bug reports and additional suggestions for improvement are encouraged.
 
 The default algorithm ("NealeMiller1997") is a modified version of Neale & Miller's (1997) algorithm used in simulations by Falk (in press), along with optimization with \code{"Rsolnp"}.
 
 The "bisect" algorithm proceeds one boundary at a time - first trying to find a value for the quantity of interest beyond the upper/lower boundary. This initial search for a boundary is based in part on use of the standard error for the quantity of interest. If/when such a value is found, bisection is used to find the boundary at which the difference test becomes significant.
 
-It is possible for LCI estimation for one boundary to fail if there is insufficient information (i.e., a small sample size, few items). The current version returns the obtained difference test at each of the boundaries. Diagnostics to examine the profile of the difference test are availble in \code{\link{lciProfile}}. 
-
 In theory, this function can compute LCIs using any estimator and difference test that \code{\link{lavTestLRT}} can properly compute and that follows a chi-square reference distribution. However, to date use of only continuous data with \code{estimator="ML"}, or \code{estimator="MLM"} and the "robust" difference test of Satorra (2000; by using \code{diff.method="satorra.2000"}) have been thoroughly tested and found to perform consistently well.
+
+It is possible for LCI estimation for one boundary to fail if there is insufficient information (i.e., a small sample size, few items). The current version returns the obtained difference test at each of the boundaries. Diagnostics to examine the profile of the difference test are availble in \code{\link{lciProfile}}. 
 
 The \code{lciProfile} function is intended to be useful for diagnostic purposes when computing LCIs. For specified values along a grid, chi-square difference tests for the parameter (or function of model parameters) of interest (specified by \code{label}) will be computed. This function uses \code{\link{lavTestLRT}} to compute the difference test, and is intended for model comparisons where the difference test follows a chi-square reference distribution under the null hypothesis of no difference.
 
@@ -137,6 +139,42 @@ lines(testSB2001$grid,testSB2001$D,lty=2)
 # Satorra & Bentler (2010)
 testSB2010<-lciProfile(fit.robust,"lam2",diff.method="satorra.bentler.2010",grid=grid)
 lines(testSB2010$grid,testSB2010$D,lty=3)
+
+# Test other optimization tweaks
+
+# optim
+lci(fit,"l2",optimizer="optim")
+
+# nlminb
+lci(fit,"l2",optimizer="nlminb")
+
+# bisection
+lci(fit,"l2",ci.method="bisect")
+
+# Manually change start values for quantity of interest
+
+# For ci.method="NealeMiller1997" and to help optimization...
+# For the lower boundary pick a point just below the estimate
+lci(fit,"l2", bound="lower", optimizer="nlminb", start=.54)
+
+# Or a point close to the boundary
+lci(fit,"l2", bound="lower", optimizer="nlminb", start=.35)
+
+# For ci.method="bisect", pick a point likely to be just a little beyond the CI boundary
+lci(fit,"l2", bound="lower", ci.method="bisect", start=.2)
+
+# Function of model parameters and ci.method="NealeMiller1997" with estimator="ML"
+lci(fit,"lam2", bound="lower", start=c(.5,.809,1.134))
+
+# To better understand the order of starting values...
+# Extract parameter table
+ptab<-parTable(fit)
+
+# This effectively displays all variables involved in definition for lam2
+all.vars(parse(file="",text=ptab$rhs[ptab$label=="lam2"]))
+
+# When ci.method="bisect", just use a single start value
+lci(fit,"lam2", bound="lower", ci.method="bisect", start=.2)
 
 }
 }
