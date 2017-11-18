@@ -452,6 +452,12 @@ lav_start <- function(start.method    = "default",
         #                    lavpartable$lhs %in% lv.names)
     }
 
+    # CFF 2017-10-04 - moved to here as temporary fix to satorra.bentler.2010
+    # was after following if/else statement
+    # override if the model syntax contains explicit starting values
+    user.idx <- which(!is.na(lavpartable$ustart))
+    start[user.idx] <- lavpartable$ustart[user.idx]
+    
     # override if a user list with starting values is provided 
     # we only look at the 'est' column for now
     if(!is.null(start.user)) {
@@ -482,10 +488,6 @@ lav_start <- function(start.method    = "default",
         }
     }
   
-    # override if the model syntax contains explicit starting values
-    user.idx <- which(!is.na(lavpartable$ustart))
-    start[user.idx] <- lavpartable$ustart[user.idx]
-
     if(debug) {
         cat("lavaan DEBUG: lavaanStart\n")
         print( start )
