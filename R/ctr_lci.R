@@ -6,7 +6,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
-              reoptimize=TRUE,
+              reoptimize=FALSE,
               iterlim=50,control=list()){
 
   ## input checking
@@ -543,18 +543,6 @@ lciProfile<-function(object,label,diff.method="default",grid=NULL){
 # utility function for re-fitting models w/ constraints or different estimator, etc.
 lci_refit<-function(object,const=NULL,estimator=NULL){
   
-  # extract some info from fitted model
-  prevmodel<-as.list(object@call)
-  
-  # extract function used to fit model (e.g., cfa,lavaan,etc.)
-  #f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
-  #if(length(f)==1){
-  #  f<-f[1]
-  #} else {
-  #  f<-get(f[2],asNamespace(f[1]))
-  #}
-  f<-"lavaan"
-  
   # parameter table
   ptab<-parTable(object)
   
@@ -573,11 +561,16 @@ lci_refit<-function(object,const=NULL,estimator=NULL){
   
   # change estimator, if desired
   if(!is.null(estimator)){
-    prevmodel$estimator<-estimator
+    object@Options$estimator<-estimator
   }
   
-  prevmodel$model<-ptab
-  M<-try(do.call(f,prevmodel[-1]),silent=TRUE)
+  object@ParTable<-as.list(ptab)
+  
+  M<-try(lavaan(slotOptions = object@Options,
+            slotParTable = object@ParTable,
+            slotSampleStats = object@SampleStats,
+            slotData = object@Data,
+            slotCache = object@Cache),silent=TRUE)
   
   return(M)
   
