@@ -157,28 +157,26 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
       if(reoptimize & ci.method=="NealeMiller1997"){
         warning("Attempting to re-optimize by bisection")
         
-        # Change start value depending on obtained D
-        if(LCI$D>crit) {
-          
-          # Obtain current boundary and start bisection there
-          newstart<-LCI$best
-          
-        } else if (LCI$D<crit){
-          # Unlikely. If there is bias, usually we miss with a D that is too high
+        tmpstart<-LCI$bound
+        
+        if (LCI$D<crit){
+          # If there is bias, usually we miss with a D that is too high
           # Could be a sign that no boundary can be found due to insufficient information
           
           # Obtain standard errors
           #pest<-parameterEstimates(object)
           se<-ptable$se[pindx[1]]
           
-          # Adjust newstart
-          newstart<-ifelse(b=="upper", newstart+.5*se,newstart-.5*se)
+          # Adjust starting values
+          tmpstart<-LCI$bound
+          tmpstart<-ifelse(b=="upper", tmpstart+.5*se,tmpstart-.5*se)
         }
         
         # Call lci_internal via bisection
         LCI<-lci_internal(fit, label, est, ptable, pindx,
                           crit, b, chat, optimizer, "bisect",
-                          newstart,diff.method, Dtol, iterlim, control)
+                          tmpstart,diff.method, Dtol, iterlim, control)
+        
       }
     }
     
