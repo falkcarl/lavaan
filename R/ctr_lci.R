@@ -101,7 +101,10 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     chat<-lav_test_diff_Satorra2000(object, M0, A.method="exact")$scaling.factor
     #crit<-chat*crit
     
-    fit<-lci_refit(object,estimator="ML")
+    object@Options$estimator<-"ML"
+    object@Options$se<-"standard"
+    object@Options$test<-"standard"
+    fit<-lci_refit(object)
     
   } else {
     chat<-1
