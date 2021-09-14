@@ -45,7 +45,7 @@ Authors@R: c(person(given   = "Yves", family = "Rosseel",
                     email = "florian.scharf@uni-leipzig.de"),
              person(given = "Han", family = "Du",
                     role = "ctb",
-                    email = "hdu@psych.ucla.edu")
+                    email = "hdu@psych.ucla.edu"),
              person(given = c("Carl","F."), family = "Falk",
                     role = "ctb",
                     email = "carl.falk@mcgill.ca")                   
