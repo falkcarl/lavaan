@@ -23,7 +23,7 @@ function(object, header       = TRUE,
                  estimates    = TRUE,
                  print        = TRUE,
                  nd           = 3L) {
-    lav_lavaanList_summary(object, 
+    lav_lavaanList_summary(object,
                            header = header, estimates = estimates,
                            print = print, nd = nd)
 })
@@ -38,47 +38,70 @@ lav_lavaanList_summary <- function(object,
                                    print     = TRUE,
                                    nd = 3L) {
 
-    output <- list()
+    out <- list()
 
     if(header) {
-        output$header <- lav_lavaanList_short_summary(object, print = print)
- 
+        out$header <- lav_lavaanList_short_summary(object, print = print)
+
         #if(print) {
         #    # show only basic information
         #    lav_lavaanList_short_summary(object)
         #}
     }
+    if(print) {
+        output <- "text"
+    } else {
+        output <- "data.frame"
+    }
 
     if(estimates && "partable" %in% object@meta$store.slots) {
-        pe <- parameterEstimates(object, se = FALSE, 
-                                 # zstat = FALSE, pvalue = FALSE, ci = FALSE, 
+        pe <- parameterEstimates(object, se = FALSE,
+                                 remove.system.eq = FALSE, remove.eq = FALSE,
+                                 remove.ineq = FALSE, remove.def = FALSE,
+                                 remove.nonfree = FALSE,
+                                 # zstat = FALSE, pvalue = FALSE, ci = FALSE,
                                  standardized = FALSE,
-                                 add.attributes = print)
-        
+                                 output = output)
+
         # scenario 1: simulation
         if(!is.null(object@meta$lavSimulate)) {
             pe$est.true <- object@meta$est.true
+            nel <- length(pe$est.true)
 
-            # EST 
+            # EST
             EST <- lav_lavaanList_partable(object, what = "est", type = "all")
-            pe$est.ave  <- rowMeans(EST)
+            AVE <- rowMeans(EST, na.rm = TRUE)
+
+            # remove things like equality constraints
+            if(length(AVE) > nel) {
+                AVE <- AVE[seq_len(nel)]
+            }
+            pe$est.ave  <- AVE
             if(est.bias) {
-                pe$est.bias <- pe$est.true - pe$est.ave
+                pe$est.bias <- pe$est.ave - pe$est.true
             }
 
             # SE?
             if(se.bias) {
-                pe$se.obs <- apply(EST, 1L, sd)
+                SE.OBS <- apply(EST, 1L, sd, na.rm = TRUE)
+                if(length(SE.OBS) > nel) {
+                    SE.OBS <- SE.OBS[seq_len(nel)]
+                }
+                pe$se.obs <- SE.OBS
                 SE <- lav_lavaanList_partable(object, what = "se", type = "all")
-                pe$se.ave <- rowMeans(SE)
-                pe$se.bias <- pe$se.obs - pe$se.ave
+                SE.AVE <- rowMeans(SE, na.rm = TRUE)
+                if(length(SE.AVE) > nel) {
+                    SE.AVE <- SE.AVE[seq_len(nel)]
+                }
+                pe$se.ave <- SE.AVE
+                pe$se.bias <- pe$se.ave - pe$se.obs
             }
 
         # scenario 2: bootstrap
         } else if(!is.null(object@meta$lavBootstrap)) {
             # print the average value for est
             EST <- lav_lavaanList_partable(object, what = "est", type = "all")
-            pe$est.ave <- rowMeans(EST)
+            pe$est.ave <- rowMeans(EST, na.rm = TRUE)
 
         # scenario 3: multiple imputation
         } else if(!is.null(object@meta$lavMultipleImputation)) {
@@ -86,18 +109,19 @@ lav_lavaanList_summary <- function(object,
             # pool est: take the mean
             EST <- lav_lavaanList_partable(object, what = "est", type = "all")
             m <- NCOL(EST)
-            pe$est <- rowMeans(EST)
+            pe$est <- rowMeans(EST, na.rm = TRUE)
 
             # pool se
 
             # between-imputation variance
             #B.var <- apply(EST, 1L, var)
-            est1 <- rowMeans(EST); est2 <- rowMeans(EST^2)
+            est1 <- rowMeans(EST, na.rm = TRUE)
+            est2 <- rowMeans(EST^2, na.rm = TRUE)
             B.var <- (est2 - est1*est1) * m/(m-1)
 
             # within-imputation variance
             SE <- lav_lavaanList_partable(object, what = "se", type = "all")
-            W.var <- rowMeans(SE^2)
+            W.var <- rowMeans(SE^2, na.rm = TRUE)
 
             # total variance: T.var = W.var + B.var + B.var/m
             pe$se <- sqrt(W.var + B.var + (B.var / m))
@@ -113,7 +137,6 @@ lav_lavaanList_summary <- function(object,
         # scenario 4: multiple groups/sets
         } else if(!is.null(object@meta$lavMultipleGroups)) {
             # show individual estimates, for each group
-#   browser()
             EST <- lav_lavaanList_partable(object, what = "est", type = "all")
             EST <- as.list(as.data.frame(EST))
             ngroups <- length(EST)
@@ -125,16 +148,22 @@ lav_lavaanList_summary <- function(object,
             names(pe) <- NAMES
         }
 
-        # scenarior 5: just a bunch of fits, using different datasets
+        # scenario 5: just a bunch of fits, using different datasets
         else {
             # print the average value for est
             EST <- lav_lavaanList_partable(object, what = "est", type = "all")
-            pe$est.ave  <- rowMeans(EST)
+            pe$est.ave  <- rowMeans(EST, na.rm = TRUE)
 
             # more?
         }
 
-        output$pe <- pe
+        # remove ==,<,>
+        rm.idx <- which(pe$op %in% c("==", "<", ">"))
+        if(length(rm.idx) > 0L) {
+            pe <- pe[-rm.idx,]
+        }
+
+        out$pe <- pe
 
         if(print) {
             # print pe?
@@ -145,16 +174,16 @@ lav_lavaanList_summary <- function(object,
         print(object@meta$store.slots)
     }
 
-    invisible(output)
+    invisible(out)
 }
 
 setMethod("coef", "lavaanList",
 function(object, type = "free", labels = TRUE) {
-    lav_lavaanList_partable(object = object, what = "est", type = type, 
+    lav_lavaanList_partable(object = object, what = "est", type = type,
                             labels = labels)
 })
 
-lav_lavaanList_partable <- function(object, what = "est", 
+lav_lavaanList_partable <- function(object, what = "est",
                                     type = "free", labels = TRUE) {
 
     if("partable" %in% object@meta$store.slots) {

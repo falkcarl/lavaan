@@ -5,31 +5,30 @@
 # - YR 18 Nov 2014: more efficient handling of linear equality constraints
 # - YR 02 Dec 2014: allow for bare-minimum parameter tables
 # - YR 25 Jan 2017: collect options in lavoptions
+# - YR 12 Mar 2021: add lavpta as argument; create model attributes (ma)
 
 # construct MATRIX lavoptions$representation of the model
 lav_model <- function(lavpartable      = NULL,
+                      lavpta           = NULL,
                       lavoptions       = NULL,
-                      th.idx           = list(),   
-                      cov.x            = list(),
-                      mean.x           = list()) { # for conditional.x only
-                                                   # (not really needed,
-                                                   #  but as a failsafe)
+                      th.idx           = list()) {
 
     # handle bare-minimum partables
     lavpartable <- lav_partable_complete(lavpartable)
- 
+
     # global info from user model
     nblocks <- lav_partable_nblocks(lavpartable)
+    ngroups <- lav_partable_ngroups(lavpartable)
     meanstructure <- any(lavpartable$op == "~1")
     categorical <- any(lavpartable$op == "|")
-    if(categorical) { 
+    if(categorical) {
         meanstructure <- TRUE
 
         # handle th.idx if length(th.idx) != nblocks
         if(nblocks != length(th.idx)) {
             th.idx <- rep(th.idx, each = nblocks)
         }
-        
+
     }
     group.w.free <- any(lavpartable$lhs == "group" & lavpartable$op == "%")
     multilevel <- FALSE
@@ -38,6 +37,17 @@ lav_model <- function(lavpartable      = NULL,
         if(nlevels > 1L) {
             multilevel <- TRUE
         }
+    }
+
+    # check mean.x/cov.x
+    if(lavoptions$conditional.x && any(lavpartable$exo > 0L)) {
+        # we should have non-empty mean.x/cov.x
+        # but they will be empty if
+    }
+
+    nefa <- lav_partable_nefa(lavpartable)
+    if(nefa > 0L) {
+        efa.values <- lav_partable_efa_values(lavpartable)
     }
 
     # handle variable definitions and (in)equality constraints
@@ -65,12 +75,12 @@ lav_model <- function(lavpartable      = NULL,
     if(lavoptions$debug) print(REP)
 
     # FIXME: check for non-existing parameters
-    bad.idx <- which(REP$mat == "" & 
+    bad.idx <- which(REP$mat == "" &
                      !lavpartable$op %in% c("==","<",">",":="))
 
     if(length(bad.idx) > 0L) {
-        
-        label <- paste(lavpartable$lhs[bad.idx[1]], 
+
+        label <- paste(lavpartable$lhs[bad.idx[1]],
                        lavpartable$op[bad.idx[1]],
                        lavpartable$rhs[bad.idx[1]], sep = " ")
         stop("lavaan ERROR: parameter is not defined: ", label)
@@ -96,8 +106,11 @@ lav_model <- function(lavpartable      = NULL,
     ov.x.dummy.lv.idx <- vector(mode="list", length=nblocks)
     ov.y.dummy.ov.idx <- vector(mode="list", length=nblocks)
     ov.y.dummy.lv.idx <- vector(mode="list", length=nblocks)
+    ov.efa.idx        <- vector(mode="list", length=nblocks)
+    lv.efa.idx        <- vector(mode="list", length=nblocks)
 
     offset <- 0L
+    # keep track of ov.names across blocks
     for(g in 1:nblocks) {
 
         # observed and latent variables for this block
@@ -112,6 +125,9 @@ lav_model <- function(lavpartable      = NULL,
         } else {
             nvar[g] <- length(ov.names)
             num.idx[[g]] <- which(ov.names %in% ov.num)
+        }
+        if(nefa > 0L) {
+            lv.names <- lav_partable_vnames(lavpartable, "lv",     block = g)
         }
 
         # model matrices for this block
@@ -139,7 +155,7 @@ lav_model <- function(lavpartable      = NULL,
             dimNames[[offset]] <- mmDimNames[[mm]]
 
             # select elements for this matrix
-            idx <- which(lavpartable$block == g & REP$mat == mmNames[mm]) 
+            idx <- which(lavpartable$block == g & REP$mat == mmNames[mm])
 
             # create empty `pattern' matrix
             # FIXME: one day, we may want to use sparse matrices...
@@ -160,7 +176,7 @@ lav_model <- function(lavpartable      = NULL,
             # 2. if equality constraints, unconstrained free parameters
             #    -> to be used in lav_model_gradient
             #if(CON$ceq.linear.only.flag) {
-            #    tmp[ cbind(REP$row[idx], 
+            #    tmp[ cbind(REP$row[idx],
             #               REP$col[idx]) ] <- lavpartable$unco[idx]
             #    if(mmSymmetric[mm]) {
             #        # NOTE: we assume everything is in the UPPER tri!
@@ -180,7 +196,7 @@ lav_model <- function(lavpartable      = NULL,
             }
             m.user.idx[[offset]] <-     which(tmp > 0)
             x.user.idx[[offset]] <- tmp[which(tmp > 0)]
-          
+
             # 4. now assign starting/fixed values
             # create empty matrix
             # FIXME: again, we may want to use sparse matrices here...
@@ -194,18 +210,18 @@ lav_model <- function(lavpartable      = NULL,
             # 4b. override with cov.x (if conditional.x = TRUE)
             # new in 0.6-1
             # shouldn't be needed, if lavpartable$start contains cov.x values
-            if(mmNames[mm] == "cov.x") {
-                tmp <- cov.x[[g]]
-            }
+            #if(mmNames[mm] == "cov.x") {
+            #    tmp <- cov.x[[g]]
+            #}
             # 4c. override with mean.x (if conditional.x = TRUE)
             # new in 0.6-1
             # shouldn't be needed, if lavpartable$start contains mean.x values
-            if(mmNames[mm] == "mean.x") {
-                tmp <- as.matrix(mean.x[[g]])
-            }
+            #if(mmNames[mm] == "mean.x") {
+            #    tmp <- as.matrix(mean.x[[g]])
+            #}
 
             # representation specific stuff
-            if(lavoptions$representation == "LISREL" && mmNames[mm] == "lambda") { 
+            if(lavoptions$representation == "LISREL" && mmNames[mm] == "lambda") {
                 ov.dummy.names.nox <- attr(REP, "ov.dummy.names.nox")[[g]]
                 ov.dummy.names.x   <- attr(REP, "ov.dummy.names.x")[[g]]
                 ov.dummy.names <- c(ov.dummy.names.nox, ov.dummy.names.x)
@@ -230,16 +246,40 @@ lav_model <- function(lavpartable      = NULL,
                 # only categorical values are listed in the lavpartable
                 # but all remaining values should be 1.0
                 idx <- which(tmp[,1L] == 0.0)
-                tmp[idx,1L] <- 1.0    
+                tmp[idx,1L] <- 1.0
             }
 
             # assign matrix to GLIST
             GLIST[[offset]] <- tmp
         } # mm
+
+        # efa related info
+        if(nefa > 0L) {
+            ov.efa.idx[[g]] <- vector("list", length = nefa)
+            lv.efa.idx[[g]] <- vector("list", length = nefa)
+            for(set in seq_len(nefa)) {
+                # determine ov idx for this set
+                ov.efa <-
+                    unique(lavpartable$rhs[ lavpartable$op == "=~" &
+                                            lavpartable$block == g &
+                                            lavpartable$efa == efa.values[set]])
+                ov.efa.idx[[g]][[set]] <- match(ov.efa, ov.names)
+
+                lv.efa <-
+                    unique(lavpartable$lhs[ lavpartable$op == "=~" &
+                                            lavpartable$block == g &
+                                            lavpartable$efa == efa.values[set]])
+                lv.efa.idx[[g]][[set]] <- match(lv.efa, lv.names)
+            }
+            names(ov.efa.idx[[g]]) <- efa.values
+            names(lv.efa.idx[[g]]) <- efa.values
+        } # efa
+
+
     } # g
 
     # fixed.x parameters?
-    #fixed.x <- any(lavpartable$exo > 0L & lavpartable$free == 0L) 
+    #fixed.x <- any(lavpartable$exo > 0L & lavpartable$free == 0L)
     #if(categorical) {
     #    fixed.x <- TRUE
     #}
@@ -259,6 +299,51 @@ lav_model <- function(lavpartable      = NULL,
         GLIST[[ lambda.idx ]][ cbind(ROWS, COLS) ] <- lavoptions$tech.muml.scale
     }
 
+    # which free parameters are observed variances?
+    ov.names <- vnames(lavpartable, "ov")
+    x.free.var.idx <- lavpartable$free[ lavpartable$free &
+                                        #!duplicated(lavpartable$free) &
+                                        lavpartable$lhs %in% ov.names &
+                                        lavpartable$op == "~~" &
+                                        lavpartable$lhs == lavpartable$rhs ]
+
+    rv.lv <- rv.ov <- list()
+    if(multilevel) {
+        # store information about random slopes (if any)
+        lv.names <- lav_partable_vnames(lavpartable, "lv")
+        # we should also add splitted-y names (x) to lv.names
+        # FIXME: make this work for multiple work multilevel
+        level.values <- lav_partable_level_values(lavpartable)
+        ovx1 <- lavNames(lavpartable, "ov.x", level = level.values[1])
+        ovx2 <- lavNames(lavpartable, "ov.x", level = level.values[2])
+        ovx12 <- ovx2[ovx2 %in% ovx1]
+        lv.names <- c(lv.names, ovx12)
+
+        # RV LV
+        rv.idx <- which(nchar(lavpartable$rv) > 0L &
+                        lavpartable$level == level.values[1] &
+                        lavpartable$rhs %in% lv.names)
+        if(length(rv.idx)) {
+            rv.lv <- lapply(rv.idx, function(x) {
+                       c(lavpartable$lhs[x], lavpartable$rhs[x]) })
+            names(rv.lv) <- lavpartable$rv[rv.idx]
+        }
+
+        # RV OV
+        rv.idx <- which(nchar(lavpartable$rv) > 0L &
+                    lavpartable$level == level.values[1] &
+                    !lavpartable$rhs %in% lv.names)
+        if(length(rv.idx)) {
+            rv.ov <- lapply(rv.idx, function(x) {
+                           c(lavpartable$lhs[x], lavpartable$rhs[x]) })
+            names(rv.ov) <- lavpartable$rv[rv.idx]
+        }
+    } # multilevel
+
+    # new in 0.6-9: model properties
+    modprop <- lav_model_properties(GLIST = GLIST,
+                                    lavpartable = lavpartable,
+                                    lavpta = lavpta)
 
     Model <- new("lavModel",
                  GLIST=GLIST,
@@ -266,12 +351,14 @@ lav_model <- function(lavpartable      = NULL,
                  isSymmetric=isSymmetric,
                  mmSize=mmSize,
                  representation=lavoptions$representation,
+                 modprop=modprop,
                  meanstructure=meanstructure,
                  categorical=categorical,
                  multilevel=multilevel,
                  link=lavoptions$link,
                  nblocks=nblocks,
-                 ngroups=nblocks, # for rsem!!!
+                 ngroups=ngroups, # breaks rsem????
+                 nefa=nefa,
                  group.w.free=group.w.free,
                  nmat=nmat,
                  nvar=nvar,
@@ -282,6 +369,7 @@ lav_model <- function(lavpartable      = NULL,
                  nx.user=max(lavpartable$id),
                  m.free.idx=m.free.idx,
                  x.free.idx=x.free.idx,
+                 x.free.var.idx=x.free.var.idx,
                  #m.unco.idx=m.unco.idx,
                  #x.unco.idx=x.unco.idx,
                  m.user.idx=m.user.idx,
@@ -315,7 +403,6 @@ lav_model <- function(lavpartable      = NULL,
                  nexo                = nexo,
                  fixed.x             = lavoptions$fixed.x,
                  conditional.x       = lavoptions$conditional.x,
-                 #x.idx               = x.idx,
                  parameterization    = lavoptions$parameterization,
 
                  ov.x.dummy.ov.idx   = ov.x.dummy.ov.idx,
@@ -323,7 +410,13 @@ lav_model <- function(lavpartable      = NULL,
                  ov.y.dummy.ov.idx   = ov.y.dummy.ov.idx,
                  ov.y.dummy.lv.idx   = ov.y.dummy.lv.idx,
 
-                 estimator           = lavoptions$estimator)
+                 ov.efa.idx          = ov.efa.idx,
+                 lv.efa.idx          = lv.efa.idx,
+                 rv.lv               = rv.lv,
+                 rv.ov               = rv.ov,
+
+                 estimator           = lavoptions$estimator,
+                 estimator.args      = lavoptions$estimator.args)
 
     if(lavoptions$debug) {
          cat("lavaan lavoptions$debug: lavaanModel\n")

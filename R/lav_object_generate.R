@@ -4,18 +4,82 @@
 # 3. model + extra parameters (for modindices/lavTestScore)
 
 
-# 1. fit an 'independence' model 
-#    note that for ML (and ULS and DWLS), the 'estimates' of the 
+# 1. fit an 'independence' model
+#    note that for ML (and ULS and DWLS), the 'estimates' of the
 #    independence model are simply the observed variances
 #    but for GLS and WLS, this is not the case!!
-lav_object_independence <- function(object, se = FALSE, verbose = FALSE,
-                                    warn = FALSE) {
+lav_object_independence <- function(object         = NULL,
+                                    # or
+                                    lavsamplestats = NULL,
+                                    lavdata        = NULL,
+                                    lavcache       = NULL,
+                                    lavoptions     = NULL,
+                                    lavpta         = NULL,
+                                    lavh1          = NULL,
+                                    # local options
+                                    se             = FALSE,
+                                    verbose        = FALSE,
+                                    warn           = FALSE) {
+
+     # object or slots?
+     if(!is.null(object)) {
+        stopifnot(inherits(object, "lavaan"))
+
+        # extract needed slots
+        lavsamplestats <- object@SampleStats
+        lavdata <- object@Data
+        lavcache <- object@Cache
+        lavoptions <- object@Options
+        lavpta     <- object@pta
+        if(.hasSlot(object, "h1"))  {
+            lavh1 <- object@h1
+        } else {
+            lavh1 <- lav_h1_logl(lavdata = object@Data,
+                                 lavsamplestats = object@SampleStats,
+                                 lavoptions = object@Options)
+        }
+        if(is.null(lavoptions$estimator.args)) {
+            lavoptions$estimator.args <- list()
+        }
+    }
 
     # construct parameter table for independence model
-    lavpartable <- lav_partable_independence(object)
+    lavpartable <- lav_partable_indep_or_unrestricted(lavobject = NULL,
+        lavdata = lavdata, lavpta = lavpta, lavoptions = lavoptions,
+        lavsamplestats = lavsamplestats, lavh1 = lavh1, independent = TRUE)
 
-    # adapt options
-    lavoptions <- object@Options
+    # new in 0.6-6: add lower bounds for ov.var
+    if(!is.null(lavoptions$optim.bounds)) {
+        lavoptions$bounds <- "doe.maar"
+        lavoptions$optim.bounds <- list(lower = "ov.var")
+        lavpartable <- lav_partable_add_bounds(partable = lavpartable,
+            lavpta = lavpta, lavh1 = lavh1, lavdata = lavdata,
+            lavsamplestats = lavsamplestats, lavoptions = lavoptions)
+    }
+
+    # new in 0.6-8: if DLS, change to sample-based
+    if(lavoptions$estimator == "DLS") {
+        if(lavoptions$estimator.args$dls.GammaNT == "sample") {
+            # nothing to do
+        } else {
+           lavoptions$estimator.args$dls.GammaNT <- "sample"
+           dls.a <- lavoptions$estimator.args$dls.a
+           for(g in 1:lavsamplestats@ngroups) {
+               GammaNT <- lav_samplestats_Gamma_NT(
+                        COV            = lavsamplestats@cov[[g]],
+                        MEAN           = lavsamplestats@mean[[g]],
+                        rescale        = FALSE,
+                        x.idx          = lavsamplestats@x.idx[[g]],
+                        fixed.x        = lavoptions$fixed.x,
+                        conditional.x  = lavoptions$conditional.x,
+                        meanstructure  = lavoptions$meanstructure,
+                        slopestructure = lavoptions$conditional.x)
+                W.DLS <- (1 - dls.a)*lavsamplestats@NACOV[[g]] + dls.a*GammaNT
+                # overwrite
+                lavsamplestats@WLS.V[[g]] <- lav_matrix_symmetric_inverse(W.DLS)
+            }
+        }
+    }
 
     # se
     if(se) {
@@ -24,11 +88,23 @@ lav_object_independence <- function(object, se = FALSE, verbose = FALSE,
         }
     } else {
         ## FIXME: if test = scaled, we need it anyway?
-        lavoptions$se <- "none" 
+        lavoptions$se <- "none"
     }
-   
-    # ALWAYS do.fit
+
+    # change options
+    lavoptions$h1 <- FALSE          # already provided by lavh1
+    lavoptions$baseline <- FALSE    # of course
+    lavoptions$loglik <- TRUE       # eg for multilevel
+    lavoptions$implied <- TRUE      # needed for loglik (multilevel)
+    lavoptions$check.start <- FALSE
+    lavoptions$check.gradient <- FALSE
+    lavoptions$check.post <- FALSE
+    lavoptions$check.vcov <- FALSE
+    lavoptions$optim.bounds <- list() # we already have the bounds
+
+    # ALWAYS do.fit and set optim.method = "nlminb"
     lavoptions$do.fit  <- TRUE
+    lavoptions$optim.method <- "nlminb"
 
     # verbose?
     lavoptions$verbose <- verbose
@@ -47,12 +123,13 @@ lav_object_independence <- function(object, se = FALSE, verbose = FALSE,
     # this seems ok now, because we first generate the covariances in
     # lavpartable, and they should be in the right order (unlike the
     # intercepts)
- 
-    FIT <- lavaan(lavpartable,  
+
+    FIT <- lavaan(lavpartable,
                   slotOptions     = lavoptions,
-                  slotSampleStats = object@SampleStats,
-                  slotData        = object@Data,
-                  slotCache       = object@Cache)
+                  slotSampleStats = lavsamplestats,
+                  slotData        = lavdata,
+                  slotCache       = lavcache,
+                  sloth1          = lavh1)
 
     FIT
 }
@@ -75,9 +152,9 @@ lav_object_unrestricted <- function(object, se = FALSE, verbose = FALSE,
         }
     } else {
         ## FIXME: if test = scaled, we need it anyway?
-        lavoptions$se <- "none" 
+        lavoptions$se <- "none"
     }
-   
+
     # ALWAYS do.fit
     lavoptions$do.fit  <- TRUE
 
@@ -98,11 +175,20 @@ lav_object_unrestricted <- function(object, se = FALSE, verbose = FALSE,
     # needed?
     if(any(lavpartable$op == "~1")) lavoptions$meanstructure <- TRUE
 
+    if(.hasSlot(object, "h1"))  {
+        lavh1 <- object@h1
+    } else {
+        lavh1 <- lav_h1_logl(lavdata = object@Data,
+                             lavsamplestats = object@SampleStats,
+                             lavoptions = object@Options)
+    }
+
     FIT <- lavaan(lavpartable,
                   slotOptions     = lavoptions,
                   slotSampleStats = object@SampleStats,
                   slotData        = object@Data,
-                  slotCache       = object@Cache)
+                  slotCache       = object@Cache,
+                  sloth1          = lavh1)
 
     FIT
 }
@@ -112,12 +198,54 @@ lav_object_unrestricted <- function(object, se = FALSE, verbose = FALSE,
 lav_object_extended <- function(object, add = NULL,
                                 remove.duplicated = TRUE,
                                 all.free = FALSE,
-                                verbose = FALSE, warn = FALSE, 
+                                verbose = FALSE, warn = FALSE,
                                 do.fit = FALSE) {
 
     # partable original model
-    partable <- object@ParTable[c("lhs","op","rhs","block","group","free",
-                                  "exo","label","plabel")] # do we need 'exo'?
+    partable <- object@ParTable[c("lhs", "op", "rhs", "free", "exo", "label",
+                                 "plabel")]
+
+    # new in 0.6-3: check for non-parameters
+    nonpar.idx <- which(partable$op %in% c("==", ":=", "<", ">"))
+
+    # always add block/group/level
+    if(!is.null(object@ParTable$group)) {
+        partable$group <- object@ParTable$group
+    } else {
+        partable$group <- rep(1L, length(partable$lhs))
+        if(length(nonpar.idx) > 0L) {
+            partable$group[nonpar.idx] <- 0L
+        }
+    }
+    if(!is.null(object@ParTable$level)) {
+        partable$level <- object@ParTable$level
+    } else {
+        partable$level <- rep(1L, length(partable$lhs))
+        if(length(nonpar.idx) > 0L) {
+            partable$level[nonpar.idx] <- 0L
+        }
+    }
+    if(!is.null(object@ParTable$block)) {
+        partable$block <- object@ParTable$block
+    } else {
+        partable$block <- rep(1L, length(partable$lhs))
+        if(length(nonpar.idx) > 0L) {
+            partable$block[nonpar.idx] <- 0L
+        }
+    }
+
+    # TDJ: Added to prevent error when lav_partable_merge() is called below.
+    #      Problematic if object@ParTable is missing one of the requested slots,
+    #      which returns a NULL slot with a missing <NA> name.  For example:
+    #        example(cfa)
+    #        lav_partable_independence(lavdata = fit@Data, lavpta = fit@pta,
+    #                                  lavoptions = lavInspect(fit, "options"))
+    #     Has no "label" or "plabel" elements.
+    empties <- which(sapply(partable, is.null))
+    if(length(empties)) {
+        partable[empties] <- NULL
+    }
+
     if(all.free) {
         partable$user <- rep(1L, length(partable$lhs))
         non.free.idx <- which(partable$free == 0L & partable$op != "==" &
@@ -126,11 +254,13 @@ lav_object_extended <- function(object, add = NULL,
         partable$free[ non.free.idx ] <- 1L
         partable$user[ non.free.idx ] <- 10L
     }
- 
+
     # replace 'start' column, since lav_model will fill these in in GLIST
     partable$start <- parameterEstimates(object, remove.system.eq = FALSE,
-                          remove.def = FALSE,
-                          remove.eq = FALSE, remove.ineq = FALSE)$est
+                                         remove.def = FALSE,
+                                         remove.eq = FALSE,
+                                         remove.ineq = FALSE,
+                                         remove.nonfree = FALSE)$est
 
     # add new parameters, extend model
     if(is.list(add)) {
@@ -140,8 +270,26 @@ lav_object_extended <- function(object, add = NULL,
         ADD <- add
     } else if(is.character(add)) {
         ngroups <- lav_partable_ngroups(partable)
-        ADD <- lavaanify(add, ngroups = ngroups)
-        ADD <- ADD[,c("lhs","op","rhs","block","user","label")]
+        ADD.orig <- lavaanify(add, ngroups = ngroups)
+        ADD <- ADD.orig[,c("lhs","op","rhs","user","label")] # minimum
+
+        # always add block/group/level
+        if(!is.null(ADD.orig$group)) {
+            ADD$group <- ADD.orig$group
+        } else {
+            ADD$group <- rep(1L, length(ADD$lhs))
+        }
+        if(!is.null(ADD.orig$level)) {
+            ADD$level <- ADD.orig$level
+        } else {
+            ADD$level <- rep(1L, length(ADD$lhs))
+        }
+        if(!is.null(ADD.orig$block)) {
+            ADD$block <- ADD.orig$block
+        } else {
+            ADD$block <- rep(1L, length(ADD$lhs))
+        }
+
         remove.idx <- which(ADD$user == 0)
         if(length(remove.idx) > 0L) {
             ADD <- ADD[-remove.idx,]
@@ -167,7 +315,7 @@ lav_object_extended <- function(object, add = NULL,
     # redo 'free'
     free.idx <- which(LIST$free > 0)
     LIST$free[free.idx] <- 1:length(free.idx)
-    
+
     # adapt options
     lavoptions <- object@Options
 
@@ -183,11 +331,34 @@ lav_object_extended <- function(object, add = NULL,
     # needed?
     if(any(LIST$op == "~1")) lavoptions$meanstructure <- TRUE
 
+    if(.hasSlot(object, "h1"))  {
+        lavh1 <- object@h1
+    } else {
+        # old object -- for example 'usemmodelfit' in package 'pompom'
+
+        # add a few fields
+        lavoptions$h1 <- FALSE
+        lavoptions$implied <- FALSE
+        lavoptions$baseline <- FALSE
+        lavoptions$loglik <- FALSE
+        lavoptions$estimator.args <- list()
+
+        # add a few slots
+        object@Data@weights <- vector("list", object@Data@ngroups)
+        object@Model@estimator <- object@Options$estimator
+        object@Model@estimator.args <- list()
+
+        lavh1 <- lav_h1_logl(lavdata = object@Data,
+                             lavsamplestats = object@SampleStats,
+                             lavoptions = object@Options)
+    }
+
     FIT <- lavaan(LIST,
                   slotOptions     = lavoptions,
                   slotSampleStats = object@SampleStats,
                   slotData        = object@Data,
-                  slotCache       = object@Cache)
+                  slotCache       = object@Cache,
+                  sloth1          = lavh1)
 
     FIT
 }

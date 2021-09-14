@@ -36,7 +36,11 @@ about the data.}
     \item{\code{testList}:}{List. test slot per dataset.}
     \item{\code{optimList}:}{List. optim slot per dataset.}
     \item{\code{impliedList}:}{List. implied slot per dataset.}
+    \item{\code{h1List}:}{List. h1 slot per dataset.}
+    \item{\code{loglikList}:}{List. loglik slot per dataset.}
+    \item{\code{baselineList}:}{List. baseline slot per dataset.}
     \item{\code{funList}:}{List. fun slot per dataset.}
+    \item{\code{internalList}:}{List. internal slot per dataset.}
     \item{\code{external}:}{List. Empty slot to be used by add-on packages.}
   }
 }
@@ -44,7 +48,7 @@ about the data.}
   \describe{
     \item{coef}{\code{signature(object = "lavaanList", type = "free")}: Returns 
       the estimates of the parameters in the model as the columns in a matrix;
-      each column corresponds to a different datasets.
+      each column corresponds to a different dataset.
       If \code{type="free"}, only the free parameters are returned.
       If \code{type="user"}, all parameters listed in the parameter table
       are returned, including constrained and fixed parameters.}

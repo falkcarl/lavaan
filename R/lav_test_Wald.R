@@ -7,7 +7,7 @@ lavTestWald <- function(object, constraints = NULL, verbose = FALSE) {
     if(object@optim$npar > 0L && !object@optim$converged)
         stop("lavaan ERROR: model did not converge")
 
-    if(is.null(constraints) || nchar(constraints) == 0L) {
+    if(is.null(constraints) || all(nchar(constraints) == 0L)) {
         stop("lavaan ERROR: constraints are empty")
     }
 
@@ -61,13 +61,13 @@ lavTestWald <- function(object, constraints = NULL, verbose = FALSE) {
     # avoid S4 dispatch
     VCOV <- lav_object_inspect_vcov(object, standardized = FALSE,
                                     free.only = TRUE,
-                                    add.labels = FALSE, 
+                                    add.labels = FALSE,
                                     add.class = FALSE,
                                     remove.duplicated = FALSE)
 
     # restricted vcov
     info.r  <- JAC %*% VCOV %*% t(JAC)
-   
+
     # Wald test statistic
     Wald <- as.numeric(t(theta.r) %*% solve( info.r ) %*% theta.r)
 

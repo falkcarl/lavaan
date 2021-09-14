@@ -1,16 +1,16 @@
 # export `lavaan' lav model description to third-party software
-# 
+#
 
-lavExport <- function(object, target="lavaan", prefix="sem", 
+lavExport <- function(object, target="lavaan", prefix="sem",
                       dir.name="lavExport", export=TRUE) {
 
     stopifnot(inherits(object, "lavaan"))
     target <- tolower(target)
 
     # check for conditional.x = TRUE
-    if(object@Model@conditional.x) {
-        stop("lavaan ERROR: this function is not (yet) available if conditional.x = TRUE")
-    }
+    #if(object@Model@conditional.x) {
+    #    stop("lavaan ERROR: this function is not (yet) available if conditional.x = TRUE")
+    #}
 
     ngroups <- object@Data@ngroups
     if(ngroups > 1L) {
@@ -27,11 +27,16 @@ lavExport <- function(object, target="lavaan", prefix="sem",
         footer <- ""
         out <- paste(header, syntax, footer, sep="")
     } else if(target == "mplus") {
-        header <- lav_mplus_header(data.file=data.file, 
+        header <- lav_mplus_header(data.file=data.file,
             group.label=object@Data@group.label,
-            ov.names=vnames(object@ParTable, "ov"),
+            ov.names=c(vnames(object@ParTable, "ov"),
+                       object@Data@sampling.weights),
             ov.ord.names=vnames(object@ParTable, "ov.ord"),
-            estimator=lav_mplus_estimator(object), 
+            weight.name = object@Data@sampling.weights,
+            listwise = lavInspect(object, "options")$missing == "listwise",
+            estimator=lav_mplus_estimator(object),
+            information = lavInspect(object, "options")$information,
+            meanstructure = lavInspect(object, "meanstructure"),
             data.type=object@Data@data.type,
             nobs=object@Data@nobs[[1L]]
             )
@@ -49,7 +54,7 @@ lavExport <- function(object, target="lavaan", prefix="sem",
     } else {
         stop("lavaan ERROR: target", target, "has not been implemented yet")
     }
-    
+
     # export to file?
     if(export) {
         dir.create(path=dir.name)
@@ -63,6 +68,9 @@ lavExport <- function(object, target="lavaan", prefix="sem",
                     DATA <- object@Data@X[[g]]
                 } else {
                     DATA <- cbind(object@Data@X[[g]], object@Data@eXo[[g]])
+                }
+                if(!is.null(object@Data@weights[[g]])) {
+                    DATA <- cbind(DATA, object@Data@weights[[g]])
                 }
                 write.table(DATA,
                             file=paste(dir.name, "/", data.file[g], sep=""),
@@ -116,7 +124,7 @@ lav2check <- function(lav) {
     #    lav$label <- paste("p",as.character(lav$eq.id), sep="")
     #    lav$label[lav$label == "p0"] <- ""
     #}
- 
+
     lav
 }
 
@@ -137,13 +145,13 @@ lav2lavaan <- lav2lav <- function(lav) {
     lav2 <- ifelse(lav$free != 0L,
                    ifelse(lav$label == "",
                           paste(lav$lhs, lav$op, lav$rhs, sep=""),
-                          paste(lav$lhs, lav$op, lav$label, "*", lav$rhs, 
+                          paste(lav$lhs, lav$op, lav$label, "*", lav$rhs,
                                 sep="")
                    ),
                    ifelse(lav$label == "",
-                          paste(lav$lhs, lav$op, lav$ustart, "*", lav$rhs, 
+                          paste(lav$lhs, lav$op, lav$ustart, "*", lav$rhs,
                                 sep=""),
-                          paste(lav$lhs, lav$op, lav$ustart, "*", lav$rhs, 
+                          paste(lav$lhs, lav$op, lav$ustart, "*", lav$rhs,
                                 "+", lav$label, "*", lav$rhs, sep="")
                    )
             )

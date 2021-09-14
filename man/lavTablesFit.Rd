@@ -25,7 +25,7 @@ lavTablesFitCm(object)
 
 \references{
 Barendse, M. T., Ligtvoet, R., Timmerman, M. E., & Oort, F. J. (2016). Structural Equation Modeling of Discrete data: 
-Model Fit after Pairwise Maximum Likelihood.\emph{Frontiers in psychology, 7}, 1-8. 
+Model Fit after Pairwise Maximum Likelihood. \emph{Frontiers in psychology, 7}, 1-8. 
 
 Joreskog, K. G., & Moustaki, I. (2001). Factor analysis of ordinal variables: A comparison of three approaches. 
 \emph{Multivariate Behavioral Research, 36}, 347-387. 
@@ -99,14 +99,11 @@ HSbinary <- as.data.frame( lapply(HS9, cut, 2, labels=FALSE) )
 
 # Single group example with one latent factor
 HS.model <- ' trait =~ x1 + x2 + x3 + x4 '
-fit <- cfa(HS.model, data=HSbinary[,1:4], ordered=names(HSbinary),
+fit <- cfa(HS.model, data=HSbinary[,1:4], ordered=names(HSbinary[,1:4]),
            estimator="PML")
 lavTablesFitCm(fit)
 lavTablesFitCp(fit)
 lavTablesFitCf(fit)
 }
 
-\keyword{
-pairwise maximum likelihood, discrete data, goodness of fit
-}
 

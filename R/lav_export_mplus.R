@@ -9,12 +9,11 @@ lav2mplus <- function(lav, group.label=NULL) {
     ngroups <- lav_partable_ngroups(lav)
 
     lav_one_group <- function(lav) {
-
         # mplus does not like variable names with a 'dot'
         # replace them by an underscore '_'
         lav$lhs <- gsub("\\.", "_", lav$lhs)
         lav$rhs <- gsub("\\.", "_", lav$rhs)
- 
+
         # remove contraints (:=, <, >, ==) here
         con.idx <- which(lav$op %in% c(":=", "<",">","=="))
         if(length(con.idx) > 0L) {
@@ -22,7 +21,7 @@ lav2mplus <- function(lav, group.label=NULL) {
         }
 
         # remove exogenous variances/covariances/intercepts...
-        exo.idx <- which(lav$exo == 1L)
+        exo.idx <- which(lav$exo == 1L & lav$op %in% c("~~", "~1"))
         if(length(exo.idx)) {
             lav <- lav[-exo.idx,]
         }
@@ -37,12 +36,13 @@ lav2mplus <- function(lav, group.label=NULL) {
         # end of line
         lav$eol <- rep(";", length(lav$lhs))
         lav$ustart <- ifelse(is.na(lav$ustart), "", lav$ustart)
-        lav$rhs2 <- ifelse(lav$free == 0L, 
+        lav$rhs2 <- ifelse(lav$free == 0L,
                            paste("@",lav$ustart,sep=""),
                            paste("*",lav$ustart,sep=""))
         lav$plabel <- gsub("\\.", "", lav$plabel)
-        lav$plabel <- ifelse(lav$plabel == "", lav$plabel,
-                            paste(" (",lav$plabel,")",sep=""))
+        LABEL <- ifelse(lav$label == "", lav$plabel, lav$label)
+        lav$plabel <- ifelse(LABEL == "", LABEL,
+                             paste(" (", LABEL, ")",sep=""))
 
         # remove variances for ordered variables
         ov.names.ord <- vnames(lav, type="ov.ord")
@@ -60,7 +60,7 @@ lav2mplus <- function(lav, group.label=NULL) {
         lav$rhs[var.idx] <- ""
 
         # scaling factors
-        scal.idx <- which(lav$op == "~*~") 
+        scal.idx <- which(lav$op == "~*~")
         lav$op[scal.idx] <- ""
         lav$rhs2[scal.idx] <- paste(lav$rhs2[scal.idx],"}",sep="")
         lav$lhs[scal.idx] <- "{"
@@ -86,7 +86,7 @@ lav2mplus <- function(lav, group.label=NULL) {
 
         lav2 <- paste(lav$lhs, lav$op, lav$rhs, lav$rhs2,
                       lav$plabel, lav$eol, sep="")
-                      
+
         body <- paste(" ", lav2, collapse="\n")
 
         body
@@ -95,8 +95,9 @@ lav2mplus <- function(lav, group.label=NULL) {
     if(ngroups == 1L) {
         body <- lav_one_group(lav)
     } else {
+        group.values <- lav_partable_group_values(lav)
         # group 1
-        body <- lav_one_group(lav[lav$group == 1,])
+        body <- lav_one_group(lav[lav$group == group.values[1],])
 
         if(is.null(group.label) || length(group.label) == 0L) {
             group.label <- paste(1:ngroups)
@@ -105,7 +106,7 @@ lav2mplus <- function(lav, group.label=NULL) {
         for(g in 2:ngroups) {
             body <- paste(body,
                           paste("\nMODEL ", group.label[g], ":\n", sep=""),
-                          lav_one_group(lav[lav$group == g,]),
+                          lav_one_group(lav[lav$group == group.values[g],]),
                           sep="")
         }
     }
@@ -131,15 +132,15 @@ lav2mplus <- function(lav, group.label=NULL) {
         if(length(eq.idx) > 0L) {
             lav$op[eq.idx] <- "="
         }
-        con <- paste(gsub("\\.","",lav$lhs[con.idx]), " ", 
-                     lav$op[con.idx], " ", 
+        con <- paste(gsub("\\.","",lav$lhs[con.idx]), " ",
+                     lav$op[con.idx], " ",
                      gsub("\\.","",lav$rhs[con.idx]), ";", sep="")
         con2 <- paste("  ", con, collapse="\n")
-        constraints <- paste(constraints, con2, sep="\n") 
+        constraints <- paste(constraints, con2, sep="\n")
     } else {
         constraints <- ""
     }
-  
+
     out <- paste(header, body, constraints, footer, sep="")
     class(out) <- c("lavaan.character", "character")
     out
@@ -154,8 +155,20 @@ lav_mplus_estimator <- function(object) {
         estimator <- "WLS"
     }
 
+    # only 1 argument for 'test' is allowed
+    if(length(object@Options$test) > 1L) {
+        standard.idx <- which(object@Options$test == "standard")
+        if(length(standard.idx) > 1L) {
+            object@Options$test <- object@Options$test[-standard.idx]
+        }
+        if(length(object@Options$test) > 1L) {
+            warning("lavaan WARNING: only first (non-standard) test will be used")
+            object@Options$test <- object@Options$test[1]
+        }
+    }
+
     if(estimator == "ML") {
-        if(object@Options$test == "yuan.bentler") {
+        if(object@Options$test %in% c("yuan.bentler", "yuan.bentler.mplus")) {
             estimator <- "MLR"
         } else if(object@Options$test == "satorra.bentler") {
             estimator <- "MLM"
@@ -178,7 +191,11 @@ lav_mplus_estimator <- function(object) {
 }
 
 lav_mplus_header <- function(data.file=NULL, group.label="", ov.names="",
-                             ov.ord.names="", estimator="ML", 
+                             listwise = FALSE,
+                             ov.ord.names="", estimator="ML",
+                             meanstructure = FALSE,
+                             weight.name = character(0L),
+                             information = "observed",
                              data.type="full", nobs=NULL) {
 
     # replace '.' by '_' in all variable names
@@ -191,12 +208,12 @@ lav_mplus_header <- function(data.file=NULL, group.label="", ov.names="",
 
     # TITLE command
     c.TITLE <- "TITLE:\n"
-    c.TITLE <- paste(c.TITLE, 
+    c.TITLE <- paste(c.TITLE,
                      "  [This syntax is autogenerated by lavExport]\n")
 
     # DATA command
     c.DATA <- "DATA:\n"
-    ngroups <- length(data.file)    
+    ngroups <- length(data.file)
     if(ngroups == 1L) {
         c.DATA  <- paste(c.DATA,
                          "  file is ", data.file, ";\n", sep="")
@@ -209,13 +226,16 @@ lav_mplus_header <- function(data.file=NULL, group.label="", ov.names="",
     }
     if(data.type == "full") {
         c.DATA <- paste(c.DATA, "  type is individual;\n", sep="")
+        if(listwise) {
+            c.DATA <- paste(c.DATA, "  listwise = on;\n", sep = "")
+        }
     } else if(data.type == "moment") {
         c.DATA <- paste(c.DATA, "  type is fullcov;\n", sep="")
         c.DATA <- paste(c.DATA, "  nobservations are ", nobs, ";\n", sep="")
     } else {
         stop("lavaan ERROR: data.type must be full or moment")
     }
-    
+
     # VARIABLE command
     c.VARIABLE <- "VARIABLE:\n"
     c.VARIABLE <- paste(c.VARIABLE, "  names are", sep="")
@@ -242,11 +262,24 @@ lav_mplus_header <- function(data.file=NULL, group.label="", ov.names="",
         }
         c.VARIABLE <- paste(c.VARIABLE,";\n",sep="")
     }
+    # weight variable?
+    if(length(weight.name) > 0L) {
+        c.VARIABLE <- paste(c.VARIABLE,
+                            "  weight = ", weight.name, ";\n",sep="")
+    }
 
     # ANALYSIS command
     c.ANALYSIS <- paste("ANALYSIS:\n  type = general;\n", sep="")
     c.ANALYSIS <- paste(c.ANALYSIS, "  estimator = ", toupper(estimator),
                         ";\n", sep="")
+    if(toupper(estimator) %in% c("ML", "MLR")) {
+        c.ANALYSIS <- paste(c.ANALYSIS, "  information = ", information,
+                            ";\n", sep="")
+    }
+    if(!meanstructure) {
+        c.ANALYSIS <- paste(c.ANALYSIS, "  model = nomeanstructure;\n",
+                            sep = "")
+    }
 
     # MODEL command
     c.MODEL <- paste("MODEL:\n")

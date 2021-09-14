@@ -3,12 +3,12 @@
 # free parameters for each bootstrap sample
 #
 # return COEF matrix of size R x npar (R = number of bootstrap samples)
-# 
+#
 # Ed. 9 mar 2012
 #
 # Notes: - faulty runs are simply ignored (with a warning)
 #        - default R=1000
-# 
+#
 # Updates: - now we have a separate @data slot, we only need to transform once
 #            for the bollen.stine bootstrap (13 dec 2011)
 #          - bug fix: we need to 'update' the fixed.x variances/covariances
@@ -19,10 +19,10 @@
 
 
 
-bootstrapLavaan <- function(object, 
-                            R           = 1000L, 
+bootstrapLavaan <- function(object,
+                            R           = 1000L,
                             type        = "ordinary",
-                            verbose     = FALSE, 
+                            verbose     = FALSE,
                             FUN         = "coef",
                             warn        = -1L,
                             return.boot = FALSE,
@@ -38,56 +38,63 @@ bootstrapLavaan <- function(object,
     stopifnot(inherits(object, "lavaan"),
               type. %in% c("nonparametric", "ordinary",
                           "bollen.stine", "parametric", "yuan"))
-    if(type. == "nonparametric") type. <- "ordinary"
+    if(type. == "nonparametric") {
+        type. <- "ordinary"
+    }
+    if(missing(parallel)) {
+        parallel <- "no"
+    }
+    parallel <- match.arg(parallel)
 
     # check if options$se is not bootstrap, otherwise, we get an infinite loop
     if(object@Options$se == "bootstrap")
         stop("lavaan ERROR: se == \"bootstrap\"; please refit model with another option for \"se\"")
-     
+
     # check if options$test is not bollen.stine
-    if(object@Options$test == "bollen.stine")
-        stop("lavaan ERROR: test == \"bollen.stine\"; please refit model with another option for \"test\"")
+    if("bollen.stine" %in% object@Options$test) {
+        stop("lavaan ERROR: test= argument contains \"bollen.stine\"; please refit model with another option for \"test\"")
+    }
 
     # check for conditional.x = TRUE
     if(object@Model@conditional.x) {
         stop("lavaan ERROR: this function is not (yet) available if conditional.x = TRUE")
     }
 
-    lavoptions. <- list(parallel = parallel, ncpus = ncpus, cl = cl, 
+    lavoptions. <- list(parallel = parallel, ncpus = ncpus, cl = cl,
                         iseed = iseed)
 
-    bootstrap.internal(object          = object,
-                       lavdata.        = NULL,
-                       lavmodel.       = NULL,
-                       lavsamplestats. = NULL,
-                       lavoptions.     = lavoptions.,
-                       lavpartable.    = NULL,
-                       R               = R,
-                       type            = type.,
-                       verbose         = verbose,
-                       FUN             = FUN,
-                       warn            = warn,
-                       return.boot     = return.boot,
-                       h0.rmsea        = h0.rmsea,
-                       ...)
+    lav_bootstrap_internal(object          = object,
+                           lavdata.        = NULL,
+                           lavmodel.       = NULL,
+                           lavsamplestats. = NULL,
+                           lavoptions.     = lavoptions.,
+                           lavpartable.    = NULL,
+                           R               = R,
+                           type            = type.,
+                           verbose         = verbose,
+                           FUN             = FUN,
+                           warn            = warn,
+                           return.boot     = return.boot,
+                           h0.rmsea        = h0.rmsea,
+                           ...)
 }
 
 # we need an internal version to be called from VCOV and lav_model_test
 # when there is no lavaan object yet!
-bootstrap.internal <- function(object          = NULL,
-                               lavdata.        = NULL,
-                               lavmodel.       = NULL,
-                               lavsamplestats. = NULL,
-                               lavoptions.     = NULL,
-                               lavpartable.    = NULL,
-                               R               = 1000L,
-                               type            = "ordinary",
-                               verbose         = FALSE,
-                               FUN             = "coef",
-                               warn            = 0L,
-                               return.boot     = FALSE,
-                               h0.rmsea        = NULL,
-                               ...) {
+lav_bootstrap_internal <- function(object          = NULL,
+                                   lavdata.        = NULL,
+                                   lavmodel.       = NULL,
+                                   lavsamplestats. = NULL,
+                                   lavoptions.     = NULL,
+                                   lavpartable.    = NULL,
+                                   R               = 1000L,
+                                   type            = "ordinary",
+                                   verbose         = FALSE,
+                                   FUN             = "coef",
+                                   warn            = 0L,
+                                   return.boot     = FALSE,
+                                   h0.rmsea        = NULL,
+                                   ...) {
 
     # warning: avoid use of 'options', 'sample' (both are used as functions
     # below...
@@ -101,6 +108,12 @@ bootstrap.internal <- function(object          = NULL,
         lavmodel       <- object@Model
         lavsamplestats <- object@SampleStats
         lavoptions     <- object@Options
+        if(!is.null(lavoptions.)) {
+            lavoptions$parallel <- lavoptions.$parallel
+            lavoptions$ncpus    <- lavoptions.$ncpus
+            lavoptions$cl       <- lavoptions.$cl
+            lavoptions$iseed    <- lavoptions.$iseed
+        }
         lavpartable    <- object@ParTable
         FUN <- match.fun(FUN)
         t0 <- FUN(object, ...)
@@ -118,17 +131,20 @@ bootstrap.internal <- function(object          = NULL,
         if(FUN == "coef") {
             t.star <- matrix(as.numeric(NA), R, lavmodel@nx.free)
             lavoptions$test <- "none"
+            lavoptions$baseline <- FALSE; lavoptions$h1 <- FALSE
         } else if(FUN == "test") {
             t.star <- matrix(as.numeric(NA), R, 1L)
+            lavoptions$baseline <- FALSE; lavoptions$h1 <- FALSE
         } else if(FUN == "coeftest") {
             t.star <- matrix(as.numeric(NA), R, lavmodel@nx.free + 1L)
+            lavoptions$baseline <- FALSE; lavoptions$h1 <- FALSE
         }
     }
 
-    parallel <- lavoptions$parallel
+    parallel <- lavoptions$parallel[1]
     ncpus    <- lavoptions$ncpus
-    cl       <- lavoptions$cl
-    iseed    <- lavoptions$iseed
+    cl       <- lavoptions[["cl"]]    # often NULL
+    iseed    <- lavoptions[["iseed"]] # often NULL
 
     # prepare
     old_options <- options(); options(warn = warn)
@@ -138,6 +154,7 @@ bootstrap.internal <- function(object          = NULL,
         if (parallel == "multicore") have_mc <- .Platform$OS.type != "windows"
         else if (parallel == "snow") have_snow <- TRUE
         if (!have_mc && !have_snow) ncpus <- 1L
+        loadNamespace("parallel")
     }
 
     # only if we return the seed
@@ -159,7 +176,6 @@ bootstrap.internal <- function(object          = NULL,
     } else {
         dataX <- lavdata@X
     }
-    dataeXo <- lavdata@eXo
 
     # if bollen.stine, transform data here
     if(type == "bollen.stine") {
@@ -184,7 +200,7 @@ bootstrap.internal <- function(object          = NULL,
 
     # if yuan, transform data here
     if(type == "yuan") {
-        # page numbers refer to Yuan et al, 2007      
+        # page numbers refer to Yuan et al, 2007
         # Define a function to find appropriate value of a
         # (p. 272); code supplied 16 jun 2016 by Cheng & Wu
         search.a <- function(F0, d, p) {
@@ -232,8 +248,12 @@ bootstrap.internal <- function(object          = NULL,
                 EL <- t(chol(Sigmahat))
                 ESE <- forwardsolve(EL, t(forwardsolve(EL, S)))
                 d <- eigen(ESE, symmetric = TRUE, only.values = TRUE)$values
-                # Find a to minimize g.a
-                a <- search.a(tau.hat, d, nmv)
+                if ("a" %in% names(list(...))) {
+                    a <- list(...)$a
+                } else {
+                    # Find a to minimize g.a
+                    a <- search.a(tau.hat, d, nmv)
+                }
                 # Calculate S_a (p. 267)
                 S.a <- a*S + (1 - a)*Sigmahat
             } else {
@@ -245,7 +265,7 @@ bootstrap.internal <- function(object          = NULL,
             S.inv.sqrt <- lav_matrix_symmetric_sqrt(lavsamplestats@icov[[g]])
 
             X <- lavdata@X[[g]]
-            X <- X %*% S.inv.sqrt %*% S.a.sqrt            
+            X <- X %*% S.inv.sqrt %*% S.a.sqrt
 
             # transformed data
             dataX[[g]] <- X
@@ -254,61 +274,46 @@ bootstrap.internal <- function(object          = NULL,
 
     # run bootstraps
     fn <- function(b) {
+
+        # create bootstrap sample, and generate new 'data' object
         if(type == "bollen.stine" || type == "ordinary" || type == "yuan") {
             # take a bootstrap sample for each group
-            for(g in 1:lavsamplestats@ngroups) {
-                stopifnot(lavsamplestats@nobs[[g]] > 1L)
-                boot.idx <- sample(x=lavsamplestats@nobs[[g]],
-                                   size=lavsamplestats@nobs[[g]], replace=TRUE)
+            BOOT.idx <- vector("list", length = lavdata@ngroups)
+            for(g in 1:lavdata@ngroups) {
+                stopifnot(lavdata@nobs[[g]] > 1L)
+                boot.idx <- sample(x=lavdata@nobs[[g]],
+                                   size=lavdata@nobs[[g]], replace=TRUE)
+                BOOT.idx[[g]] <- boot.idx
                 dataX[[g]] <- dataX[[g]][boot.idx,,drop=FALSE]
-                if(!is.null(dataeXo[[g]]))
-                    dataeXo[[g]] <- dataeXo[[g]][boot.idx,,drop=FALSE]
             }
+            newData <- lav_data_update(lavdata = lavdata, newX = dataX,
+                                       BOOT.idx = BOOT.idx,
+                                       lavoptions = lavoptions)
+
         } else { # parametric!
-            for(g in 1:lavsamplestats@ngroups) {
-                dataX[[g]] <- MASS::mvrnorm(n     = lavsamplestats@nobs[[g]],
+            for(g in 1:lavdata@ngroups) {
+                dataX[[g]] <- MASS::mvrnorm(n     = lavdata@nobs[[g]],
                                             Sigma = Sigma.hat[[g]],
                                             mu    = Mu.hat[[g]])
             }
+            newData <- lav_data_update(lavdata = lavdata, newX = dataX,
+                                       lavoptions = lavoptions)
         }
 
         # verbose
         if(verbose) cat("  ... bootstrap draw number:", sprintf("%4d", b))
         bootSampleStats <- try(lav_samplestats_from_data(
-                               lavdata       = NULL,
-                               DataX         = dataX,
-                               DataeXo       = dataeXo,
-                               DataOv        = lavdata@ov,
-                               DataOvnames   = lavdata@ov.names,
-                               DataOvnamesx  = lavdata@ov.names.x,
-                               missing       = lavoptions$missing,
-                               rescale       = (lavoptions$estimator == "ML" &&
-                                                lavoptions$likelihood == "normal"),
-                               estimator     = lavoptions$estimator,
-                               mimic         = lavoptions$mimic,
-                               meanstructure = lavoptions$meanstructure,
-                               conditional.x = lavoptions$conditional.x,
-                               group.w.free  = lavoptions$group.w.free,
-                               #missing.h1    = (FUN != "coef"), # not if fixed.x, otherwise starting values fails!
-                               missing.h1    = TRUE,
-                               verbose       = FALSE), silent=TRUE) 
+                               lavdata       = newData,
+                               lavoptions    = lavoptions), silent = TRUE)
         if(inherits(bootSampleStats, "try-error")) {
-            if(verbose) cat("     FAILED: creating sample statistics\n")
+            if(verbose) {
+                cat("     FAILED: creating sample statistics\n")
+                cat(bootSampleStats[1])
+            }
             options(old_options)
             return(NULL)
         }
 
-        # just in case we need the new X in the data slot (lm!)
-        lavdata@X <- dataX
-
-        # adjust model slot if fixed.x variances/covariances
-        # have changed:
-      ### FIXME #####
-        #if(lavmodel@fixed.x && length(vnames(partable, "ov.x")) > 0L) {
-        #    for(g in 1:lavsamplestats@ngroups) {
-        #        
-        #    }
-        #}
         if(lavmodel@fixed.x && length(vnames(lavpartable, "ov.x")) > 0L) {
             model.boot <- NULL
         } else {
@@ -325,17 +330,17 @@ bootstrap.internal <- function(object          = NULL,
             if(verbose) cat("     FAILED: no convergence\n")
             options(old_options)
             return(NULL)
-        } 
-        
+        }
+
         # extract information we need
         if(is.null(object)) { # internal use only!
             if(FUN == "coef") {
                 out <- fit.boot@optim$x
-            } else if(FUN == "test") { 
+            } else if(FUN == "test") {
                 out <- fit.boot@test[[1L]]$stat
-            } else if(FUN == "coeftest") { 
+            } else if(FUN == "coeftest") {
                 out <- c(fit.boot@optim$x, fit.boot@test[[1L]]$stat)
-            } 
+            }
         } else { # general use
             out <- try(FUN(fit.boot, ...), silent=TRUE)
         }
@@ -343,8 +348,8 @@ bootstrap.internal <- function(object          = NULL,
             if(verbose) cat("     FAILED: applying FUN to fit.boot\n")
             options(old_options)
             return(NULL)
-        } 
-        if(verbose) cat("   OK -- niter = ", 
+        }
+        if(verbose) cat("   OK -- niter = ",
                         sprintf("%3d", fit.boot@optim$iterations), " fx = ",
                         sprintf("%13.9f", fit.boot@optim$fx), "\n")
         out
@@ -352,6 +357,9 @@ bootstrap.internal <- function(object          = NULL,
 
     # this is from the boot function in package boot
     RR <- R
+    if(verbose) {
+        cat("\n")
+    }
     res <- if (ncpus > 1L && (have_mc || have_snow)) {
         if (have_mc) {
             parallel::mclapply(seq_len(RR), fn, mc.cores = ncpus)
@@ -392,7 +400,7 @@ bootstrap.internal <- function(object          = NULL,
     # NOT DONE YET
     if(return.boot) {
         # mimic output boot function
-    } 
+    }
 
     # restore options
     options(old_options)

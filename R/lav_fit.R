@@ -1,10 +1,11 @@
+# deprecated: only kept in order to avoid some older packages
 lav_model_fit <- function(lavpartable = NULL,
-                          lavmodel    = NULL, 
-                          x           = NULL, 
-                          VCOV        = NULL, 
+                          lavmodel    = NULL,
+                          x           = NULL,
+                          VCOV        = NULL,
                           TEST        = NULL) {
 
-    stopifnot(is.list(lavpartable), class(lavmodel) == "lavModel")
+    stopifnot(is.list(lavpartable), inherits(lavmodel, "lavModel"))
 
     # extract information from 'x'
     iterations = attr(x, "iterations")
@@ -26,7 +27,7 @@ lav_model_fit <- function(lavpartable = NULL,
     est <- lav_model_get_parameters(lavmodel = lavmodel, type = "user")
 
     # did we compute standard errors?
-    se <- lav_model_vcov_se(lavmodel = lavmodel, lavpartable = lavpartable, 
+    se <- lav_model_vcov_se(lavmodel = lavmodel, lavpartable = lavpartable,
                             VCOV = VCOV, BOOT = attr(VCOV, "BOOT.COEF"))
 
     # did we compute test statistics
