@@ -1,5 +1,5 @@
 # class definitions
-# 
+#
 # initial version: YR 25/03/2009
 # added ModelSyntax: YR 02/08/2010
 # deleted ModelSyntax: YR 01/11/2010 (using flattened model syntax now)
@@ -7,11 +7,11 @@
 setClass("lavData",
     representation(
         data.type="character",     # "full", "moment" or "none"
-        ngroups="integer",         # number of groups
         group="character",         # group variable
-        nlevels="integer",         # number of levels
-        cluster="character",       # cluster variable(s)
+        ngroups="integer",         # number of groups
         group.label="character",   # group labels
+        cluster="character",       # cluster variable(s)
+        nlevels="integer",         # number of levels
         level.label="character",   # level labels
         std.ov="logical",          # standardize observed variables?
         nobs="list",               # effective number of observations
@@ -22,6 +22,8 @@ setClass("lavData",
         #ov.types="list",           # variable types (per group)
         #ov.idx="list",             # column indices (all observed variables)
         ordered="character",       # ordered variables
+        weights="list",            # sampling weights (per group)
+        sampling.weights="character", # sampling weights variable
         ov="list",                 # variable table
         case.idx="list",           # case indices per group
         missing="character",       # "listwise" or not?
@@ -48,7 +50,7 @@ setClass("lavSampleStats",         # sample moments
         res.var="list",            # residual variances
         res.th="list",             # residual thresholds
         res.th.nox="list",         # residual thresholds ignoring x
-        res.slopes="list",         # slopes exo (if conditional.x) 
+        res.slopes="list",         # slopes exo (if conditional.x)
         res.int="list",            # intercepts (if conditional.x)
 
         mean.x="list",             # mean exo
@@ -57,7 +59,7 @@ setClass("lavSampleStats",         # sample moments
         group.w="list",            # group weight
 
         nobs="list",               # effective number of obs (per group)
-        ntotal="integer",          # total number of obs (all groups)
+        ntotal="numeric",          # total number of obs (all groups)
         ngroups="integer",         # number of groups
         x.idx="list",              # x.idx if fixed.x = TRUE
 
@@ -65,7 +67,9 @@ setClass("lavSampleStats",         # sample moments
         cov.log.det="list",        # log det of observed cov (per group)
         res.icov="list",
         res.cov.log.det="list",
-        ridge="numeric",           # ridge constant
+        #ridge.constant="numeric",  # ridge constant (per group)
+        #ridge.constant.x="numeric",# ridge constant (per group) for eXo
+        ridge="numeric",
         WLS.obs="list",            # all relevant observed stats in a vector
         WLS.V="list",              # weight matrix for GLS/WLS
         WLS.VD="list",             # diagonal of weight matrix only
@@ -90,6 +94,7 @@ setClass("lavModel",          # MATRIX representation of the sem model
         mmSize="integer",          # model matrix size (unique only)
 
         representation="character",  # stub, until we define more classes
+        modprop="list",              # model properties
         meanstructure="logical",
         categorical="logical",
         multilevel="logical",
@@ -98,6 +103,7 @@ setClass("lavModel",          # MATRIX representation of the sem model
 
         nblocks="integer",
         ngroups="integer",   # only for rsem!! (which uses rsem:::computeDelta)
+        nefa="integer",
         nmat="integer",
         nvar="integer",
         num.idx="list",
@@ -116,7 +122,7 @@ setClass("lavModel",          # MATRIX representation of the sem model
         x.def.idx="integer",
         x.ceq.idx="integer",
         x.cin.idx="integer",
-        #x.free.var.idx="integer",
+        x.free.var.idx="integer",
 
         eq.constraints="logical",
         eq.constraints.K="matrix",
@@ -135,6 +141,7 @@ setClass("lavModel",          # MATRIX representation of the sem model
         cin.rhs="numeric",
         cin.linear.idx="integer",
         cin.nonlinear.idx="integer",
+        ceq.efa.JAC="matrix",
         con.jac="matrix",
         con.lambda="numeric",
 
@@ -147,7 +154,17 @@ setClass("lavModel",          # MATRIX representation of the sem model
         ov.y.dummy.ov.idx="list",
         ov.y.dummy.lv.idx="list",
 
-        estimator="character"
+        ov.efa.idx="list",
+        lv.efa.idx="list",
+
+        rv.ov="list",
+        rv.lv="list",
+
+        H="list",
+        lv.order="list",
+
+        estimator="character",
+        estimator.args="list"
     )
 )
 
@@ -177,6 +194,7 @@ setClass("Fit",
 
 setClass("lavaan",
     representation(
+        version     = "character",       # lavaan version
         call        = "call",            # matched call
         timing      = "list",            # timing information
         Options     = "list",            # lavOptions
@@ -186,7 +204,7 @@ setClass("lavaan",
         SampleStats = "lavSampleStats",  # sample statistics
         Model       = "lavModel",        # internal matrix representation
         Cache       = "list",            # housekeeping stuff
-        Fit         = "Fit",             # fitted results 
+        Fit         = "Fit",             # fitted results
         boot        = "list",            # bootstrap results
         optim       = "list",            # optimizer results
         loglik      = "list",            # loglik values and info
@@ -195,8 +213,9 @@ setClass("lavaan",
         test        = "list",            # test
         h1          = "list",            # unrestricted model results
         baseline    = "list",            # baseline model results
+        internal    = "list",            # optional slot, for internal use
         external    = "list"             # optional slot, for add-on packages
-    ) 
+    )
 )
 
 setClass("lavaanList",
@@ -218,6 +237,10 @@ setClass("lavaanList",
         testList        = "list",
         optimList       = "list",
         impliedList     = "list",
+        h1List          = "list",
+        loglikList      = "list",
+        baselineList    = "list",
+        internalList    = "list",
         funList         = "list",
         external        = "list"       # optional slot, for add-on packages
     )
@@ -229,4 +252,4 @@ setClass("lavaanList",
 
 
 
-                      
+

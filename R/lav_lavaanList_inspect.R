@@ -9,11 +9,11 @@ inspect.lavaanList <- function(object, what = "free", ...) {
 }
 
 # the `tech' version: no labels, full matrices, ... for further processing
-lavTech.lavaanList <- function(object, 
+lavTech.lavaanList <- function(object,
                                what                   = "free",
                                add.labels             = FALSE,
                                add.class              = FALSE,
-                               list.by.group          = FALSE,  
+                               list.by.group          = FALSE,
                                drop.list.single.group = FALSE) {
 
     lavListInspect(object = object, what = what,
@@ -70,19 +70,19 @@ lavListInspect <- function(object,
 
     #### model matrices, with different contents ####
     if(what == "free") {
-        lav_lavaanList_inspect_modelmatrices(object, what = "free", 
+        lav_lavaanList_inspect_modelmatrices(object, what = "free",
             type = "free", add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "partable" || what == "user") {
-        lav_lavaanList_inspect_modelmatrices(object, what = "free", 
+        lav_lavaanList_inspect_modelmatrices(object, what = "free",
             type="partable", add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "start" || what == "starting.values") {
         lav_lavaanList_inspect_modelmatrices(object, what = "start",
             add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
 
 
@@ -97,16 +97,58 @@ lavListInspect <- function(object,
         object@Data@group
     } else if(what == "cluster") {
         object@Data@cluster
+    } else if(what == "nlevels") {
+        object@Data@nlevels
+    } else if(what == "nclusters") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "nclusters",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "ncluster.size") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "ncluster.size",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.size") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.size",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.id") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.id",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.idx") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.idx",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.label") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.label",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.sizes") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.sizes",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "average.cluster.size") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "average.cluster.size",
+            drop.list.single.group = drop.list.single.group)
     } else if(what == "ordered") {
         object@Data@ordered
     } else if(what == "group.label") {
         object@Data@group.label
-    } else if(what == "nobs") {
+    } else if(what == "level.label") {
+        object@Data@level.label
+    } else if(what == "nobs") {     # only for original!
         unlist( object@Data@nobs )
-    } else if(what == "norig") {
+    } else if(what == "norig") {    # only for original!
         unlist( object@Data@norig )
-    } else if(what == "ntotal") {
+    } else if(what == "ntotal") {   # only for original!
         sum(unlist( object@Data@nobs ))
+
+    #### from the model object (but stable) over datasets? ####
+    } else if(what == "th.idx") {
+        lav_lavaanList_inspect_th_idx(object,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
 
 
     #### meanstructure, categorical ####
@@ -118,7 +160,7 @@ lavListInspect <- function(object,
         object@Model@fixed.x
     } else if(what == "parameterization") {
         object@Model@parameterization
-    
+
     # options
     } else if(what == "options" || what == "lavoptions") {
         object@Options
@@ -184,7 +226,7 @@ lav_lavaanList_inspect_modelmatrices <- function(object, what = "free",
             x.user.idx <- object@Model@x.user.idx[[mm]]
             START <- lav_lavaanList_inspect_start(object)
             GLIST[[mm]][m.user.idx] <- START[x.user.idx]
-        } 
+        }
 
         # class
         if(add.class) {
@@ -209,7 +251,7 @@ lav_lavaanList_inspect_modelmatrices <- function(object, what = "free",
         LABEL <- names(ID)
         for(con in 1:nrow(CON)) {
             # lhs
-            LHS.labels <- all.vars(as.formula(paste("~",CON[con,"lhs"]))) 
+            LHS.labels <- all.vars(as.formula(paste("~",CON[con,"lhs"])))
 
             if(length(LHS.labels) > 0L) {
                 # par id
@@ -241,7 +283,7 @@ lav_lavaanList_inspect_modelmatrices <- function(object, what = "free",
         # add this info at the top
         #GLIST <- c(constraints = list(CON), GLIST)
         #no, not a good idea, it does not work with list.by.group
-  
+
         # add it as a 'header' attribute?
         attr(CON, "header") <- "Note: model contains equality constraints:"
         con.flag <- TRUE
@@ -283,5 +325,41 @@ lav_lavaanList_inspect_modelmatrices <- function(object, what = "free",
     }
 
     OUT
+}
+
+lav_lavaanList_inspect_th_idx <- function(object,
+    add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
+
+    # thresholds idx -- usually, we get it from SampleStats
+    # but fortunately, there is a copy in Model, but no names...
+    OUT <- object@Model@th.idx
+
+    # nblocks
+    nblocks <- length(OUT)
+
+    # labels + class
+    for(b in seq_len(nblocks)) {
+        #if(add.labels && length(OUT[[b]]) > 0L) {
+        #    names(OUT[[b]]) <- object@SampleStats@th.names[[b]]
+        #}
+        if(add.class && !is.null(OUT[[b]])) {
+            class(OUT[[b]]) <- c("lavaan.vector", "numeric")
+        }
+    }
+
+    if(nblocks == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else {
+        if(object@Data@nlevels == 1L &&
+           length(object@Data@group.label) > 0L) {
+            names(OUT) <- unlist(object@Data@group.label)
+        } else if(object@Data@nlevels > 1L &&
+                  length(object@Data@group.label) == 0L) {
+            names(OUT) <- object@Data@level.label
+        }
+    }
+
+    OUT
+
 }
 

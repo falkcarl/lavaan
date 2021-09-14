@@ -7,28 +7,30 @@ importFrom("graphics",
            "plot")
 
 importFrom("methods",
-           "is", "new", "slot", "slotNames",
+           "is", "new", "slot", "slotNames", ".hasSlot",
+           "setClass", "representation", "setGeneric",
+           "setRefClass", "setMethod",
            # generics,
+           "show", "signature")
 
-           "show")
-importFrom("stats", 
-           "as.formula", "complete.cases", "cor", "cov", "cov2cor",
+importFrom("stats",
+           "as.formula", "complete.cases", "cor", "cov", "cov2cor", "cov.wt",
            "dnorm", "lm.fit", "na.omit", "nlminb", "optim", "pchisq",
            "plogis", "pnorm", "qchisq", "qnorm", "quantile", "rnorm", "runif",
            "sd", "terms", "uniroot", "var", "weighted.mean", "aggregate",
+           "dlogis", "qlogis", "optimize",
            # generics
            "coef", "residuals", "resid", "fitted.values", "fitted",
            "predict", "update", "anova", "vcov")
 
 importFrom("utils",
            "combn", "modifyList", "packageDescription", "read.table",
-           "str", "write.table")
+           "str", "write.table", "write.csv", "packageVersion")
 
-importFrom("quadprog",
-           "solve.QP")
+#importFrom("quadprog",
+#           "solve.QP")
 
 importFrom("mnormt",
-           "dmnorm",
            "sadmvn")
 
 importFrom("pbivnorm",
@@ -50,7 +52,8 @@ if(getRversion() >= "2.13.0") {
 # export ordinary functions defined in this package
 export("lavaan", "cfa", "sem", "growth",
        "lavaanList", "cfaList", "semList",
-       "fsr",
+       #"fsr", "twostep",
+       "sam",
        # new name           # old name
        "lavParTable",       "lavaanify",
        "lavNames",          "lavaanNames",
@@ -58,6 +61,7 @@ export("lavaan", "cfa", "sem", "growth",
        "lavInspect",        "inspect",
        "lavTech",
        "lavListInspect",    "lavListTech",
+       "lavResiduals",
        # utilities
        "getCov", "char2num", "cor2cov",
        # options,
@@ -80,7 +84,6 @@ export("lavaan", "cfa", "sem", "growth",
        "lavMatrixRepresentation",
        "mplus2lavaan",
        "mplus2lavaan.modelSyntax",
-       #"prelav",
        #"lavData",
        "lavPredict",
        "lavCor",
@@ -126,6 +129,7 @@ export("lavaan", "cfa", "sem", "growth",
        "lav_matrix_orthogonal_complement",
        "lav_matrix_bdiag",
        "lav_matrix_trace",
+       "lav_matrix_cov",
 
        # lav_partable
        "lav_partable_independence",   # used by semTools!
@@ -138,6 +142,7 @@ export("lavaan", "cfa", "sem", "growth",
        "lav_partable_complete",
        "lav_partable_attributes",
        "lav_partable_merge",
+       "lav_partable_add",
        "lav_partable_constraints_def",
        "lav_partable_constraints_ceq",
        "lav_partable_constraints_ciq",
@@ -157,16 +162,22 @@ export("lavaan", "cfa", "sem", "growth",
        "lav_model_implied",
        "lav_model_vcov_se",
 
+       # lav_data
+       "lav_data_update",
+ 
+       # lav_samplestats
+       "lav_samplestats_from_data"
+
        # deprecated functions
-       "vech", "vech.reverse", "vechru", "vechru.reverse", "lower2full",
-       "vechr", "vechr.reverse", "vechu", "vechu.reverse", "upper2full",
-       "duplicationMatrix", "commutationMatrix", "sqrtSymmetricMatrix"
+       #"vech", "vech.reverse", "vechru", "vechru.reverse", "lower2full",
+       #"vechr", "vechr.reverse", "vechu", "vechu.reverse", "upper2full",
+       #"duplicationMatrix", "commutationMatrix", "sqrtSymmetricMatrix"
       )
 
 # export Classes
 exportClasses(
               "lavaan",
-              "lavaanList" 
+              "lavaanList"
              )
 
 # export Methods
@@ -188,18 +199,21 @@ S3method(print, lavaan.matrix)
 S3method(print, lavaan.matrix.symmetric)
 S3method(print, lavaan.vector)
 S3method(print, lavaan.parameterEstimates)
-S3method(print, prelav)
+S3method(print, lavaan.fitMeasures)
 S3method(print, lavaan.fsr)
 S3method(summary, lavaan.fsr)
 S3method(pairs, lavaan)
 S3method(print, InformativeTesting)
 S3method(plot, InformativeTesting)
-# S3method(print, lavaan.tables.fit.Cf)
-# S3method(print, lavaan.tables.fit.Cp)
-# S3method(print, lavaan.tables.fit.Cm)
+S3method(print, lavaan.tables.fit.Cf)
+S3method(print, lavaan.tables.fit.Cp)
+S3method(print, lavaan.tables.fit.Cm)
 S3method(inspect,    lavaan)
 S3method(inspect,    lavaanList)
 S3method(lavInspect, lavaan)
 S3method(lavTech,    lavaan)
 S3method(lavInspect, lavaanList)
 S3method(lavTech,    lavaanList)
+if(getRversion() >= "3.6.0") {
+    S3method(sandwich::estfun, lavaan)
+}

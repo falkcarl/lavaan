@@ -10,11 +10,11 @@ inspect.lavaan <- function(object, what = "free", ...) {
 }
 
 # the `tech' version: no labels, full matrices, ... for further processing
-lavTech.lavaan <- function(object, 
+lavTech.lavaan <- function(object,
                            what                   = "free",
                            add.labels             = FALSE,
                            add.class              = FALSE,
-                           list.by.group          = FALSE,  
+                           list.by.group          = FALSE,
                            drop.list.single.group = FALSE) {
 
     lavInspect.lavaan(object, what = what,
@@ -45,67 +45,76 @@ lavInspect.lavaan <- function(object,
 
     #### model matrices, with different contents ####
     if(what == "free") {
-        lav_object_inspect_modelmatrices(object, what = "free", 
+        lav_object_inspect_modelmatrices(object, what = "free",
             type = "free", add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "impute" ||
               what == "imputed") { # just to ease the transition for semTools!
         object@imputed
     } else if(what == "partable" || what == "user") {
-        lav_object_inspect_modelmatrices(object, what = "free", 
+        lav_object_inspect_modelmatrices(object, what = "free",
             type="partable", add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "se" ||
               what == "std.err" ||
               what == "standard.errors") {
         lav_object_inspect_modelmatrices(object, what = "se",
             add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "start" || what == "starting.values") {
         lav_object_inspect_modelmatrices(object, what = "start",
             add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "est"  || what == "estimates" ||
               what == "x") {
         lav_object_inspect_modelmatrices(object, what = "est",
             add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
-            #list.by.group = FALSE, for semTools only
+            list.by.group = list.by.group,
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "est.unrotated") {
+        lav_object_inspect_modelmatrices(object, what = "est.unrotated",
+            add.labels = add.labels, add.class = add.class,
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "dx.free") {
         lav_object_inspect_modelmatrices(object, what = "dx.free",
             add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "dx.all") {
         lav_object_inspect_modelmatrices(object, what = "dx.all",
             add.labels = add.labels, add.class = add.class,
-            list.by.group = list.by.group, 
+            list.by.group = list.by.group,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "std" || what == "std.all" || what == "standardized") {
         lav_object_inspect_modelmatrices(object, what = "std.all",
            add.labels = add.labels, add.class = add.class,
-           list.by.group = list.by.group, 
+           list.by.group = list.by.group,
            drop.list.single.group = drop.list.single.group)
     } else if(what == "std.lv") {
         lav_object_inspect_modelmatrices(object, what = "std.lv",
            add.labels = add.labels, add.class = add.class,
-           list.by.group = list.by.group, 
+           list.by.group = list.by.group,
            drop.list.single.group = drop.list.single.group)
     } else if(what == "std.nox") {
         lav_object_inspect_modelmatrices(object, what = "std.nox",
            add.labels = add.labels, add.class = add.class,
-           list.by.group = list.by.group, 
+           list.by.group = list.by.group,
            drop.list.single.group = drop.list.single.group)
 
 
     #### parameter table ####
     } else if(what == "list") {
         parTable(object)
+
+    #### bootstrap coef ####
+    } else if(what %in% c("boot", "bootstrap", "boot.coef", "coef.boot")) {
+        lav_object_inspect_boot(object, add.labels = add.labels,
+                                add.class = add.class)
 
     #### fit indices ####
     } else if(what == "fit" ||
@@ -114,6 +123,15 @@ lavInspect.lavaan <- function(object,
               what == "fit.indices") {
         fitMeasures(object)
 
+    #### baseline model ####
+    } else if(what == "baseline.partable") {
+        out <- as.data.frame(object@baseline$partable, stringsAsFactors = FALSE)
+        if(add.class) {
+            class(out) <- c("lavaan.data.frame", "data.frame")
+        }
+        return(out)
+    } else if(what == "baseline.test") {
+        object@baseline$test
 
     #### modification indices ####
     } else if(what == "mi" ||
@@ -131,8 +149,20 @@ lavInspect.lavaan <- function(object,
               what == "samp" ||
               what == "sample" ||
               what == "samplestatistics") {
-        lav_object_inspect_sampstat(object, h1 = FALSE,
-            add.labels = add.labels, add.class = add.class, 
+        # new in 0.6-3: always use h1 = TRUE!!!
+        lav_object_inspect_sampstat(object, h1 = TRUE, std = FALSE,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "obs.std" ||
+              what == "observed.std" ||
+              what == "sampstat.std" ||
+              what == "sampstats.std" ||
+              what == "samplestats.std" ||
+              what == "samp.std" ||
+              what == "sample.std" ||
+              what == "samplestatistics.std") {
+        lav_object_inspect_sampstat(object, h1 = TRUE, std = TRUE,
+            add.labels = add.labels, add.class = add.class,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "h1" || what == "missing.h1" || what == "sampstat.h1") {
         lav_object_inspect_sampstat(object, h1 = TRUE,
@@ -157,21 +187,57 @@ lavInspect.lavaan <- function(object,
 
     #### data + missingness ####
     } else if(what == "data") {
-        lav_object_inspect_data(object, 
+        lav_object_inspect_data(object, add.labels = add.labels,
             drop.list.single.group = drop.list.single.group)
     } else if(what == "case.idx") {
         lav_object_inspect_case_idx(object,
-            drop.list.single.group = drop.list.single.group) 
+            drop.list.single.group = drop.list.single.group)
     } else if(what == "ngroups") {
         object@Data@ngroups
     } else if(what == "group") {
         object@Data@group
     } else if(what == "cluster") {
         object@Data@cluster
+    } else if(what == "nlevels") {
+        object@Data@nlevels
+    } else if(what == "nclusters") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "nclusters",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "ncluster.size") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "ncluster.size",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.size") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.size",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.id") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.id",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.idx") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.idx",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.label") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.label",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "cluster.sizes") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "cluster.sizes",
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "average.cluster.size") {
+        lav_object_inspect_cluster_info(object, level = 2L,
+            what = "average.cluster.size",
+            drop.list.single.group = drop.list.single.group)
     } else if(what == "ordered") {
         object@Data@ordered
     } else if(what == "group.label") {
         object@Data@group.label
+    } else if(what == "level.label") {
+        object@Data@level.label
     } else if(what == "nobs") {
         unlist( object@Data@nobs )
     } else if(what == "norig") {
@@ -193,13 +259,14 @@ lavInspect.lavaan <- function(object,
 
     #### rsquare ####
     } else if(what == "rsquare" || what == "r-square" || what == "r2") {
-         lav_object_inspect_rsquare(object, 
+         lav_object_inspect_rsquare(object,
              add.labels = add.labels, add.class = add.class,
              drop.list.single.group = drop.list.single.group)
 
 
     #### model-implied sample statistics ####
-    } else if(what == "implied" || what == "fitted") {
+    } else if(what == "implied" || what == "fitted" ||
+              what == "expected" || what == "exp") {
         lav_object_inspect_implied(object,
             add.labels = add.labels, add.class = add.class,
             drop.list.single.group = drop.list.single.group)
@@ -250,6 +317,10 @@ lavInspect.lavaan <- function(object,
         lav_object_inspect_th(object,
             add.labels = add.labels, add.class = add.class,
             drop.list.single.group = drop.list.single.group)
+    } else if(what == "th.idx") {
+        lav_object_inspect_th_idx(object,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
     } else if(what == "vy") {
         lav_object_inspect_vy(object,
             add.labels = add.labels, add.class = add.class,
@@ -265,7 +336,7 @@ lavInspect.lavaan <- function(object,
         lav_object_inspect_theta(object,  correlation.metric = TRUE,
             add.labels = add.labels, add.class = add.class,
             drop.list.single.group = drop.list.single.group)
- 
+
 
 
     #### convergence, meanstructure, categorical ####
@@ -286,8 +357,13 @@ lavInspect.lavaan <- function(object,
     } else if(what == "npar") {
         lav_object_inspect_npar(object, type = "free")
     } else if(what == "coef") {
-        lav_object_inspect_coef(object, type = "free",
-                                add.labels = add.labels, add.class = add.class)
+        # this breaks simsem and semTools -- 0.6-1
+        #lav_object_inspect_coef(object, type = "free",
+        #                        add.labels = add.labels, add.class = add.class)
+        lav_object_inspect_modelmatrices(object, what = "est",
+            type = "free", add.labels = add.labels, add.class = add.class,
+            list.by.group = list.by.group,
+            drop.list.single.group = drop.list.single.group)
 
 
     #### NACOV samplestats ####
@@ -300,7 +376,13 @@ lavInspect.lavaan <- function(object,
     #### gradient, Hessian, information, first.order, vcov ####
     } else if(what == "gradient") {
         lav_object_inspect_gradient(object,
-            add.labels = add.labels, add.class = add.class)
+            add.labels = add.labels, add.class = add.class, logl = FALSE)
+    } else if(what == "gradient.logl") {
+        lav_object_inspect_gradient(object,
+            add.labels = add.labels, add.class = add.class, logl = TRUE)
+    } else if(what == "optim.gradient") {
+        lav_object_inspect_gradient(object,
+            add.labels = add.labels, add.class = add.class, optim = TRUE)
     } else if(what == "hessian") {
         lav_object_inspect_hessian(object,
             add.labels = add.labels, add.class = add.class)
@@ -317,7 +399,9 @@ lavInspect.lavaan <- function(object,
         lav_object_inspect_information(object, information = "observed",
             augmented = FALSE, inverted = FALSE,
             add.labels = add.labels, add.class = add.class)
-    } else if(what == "information.first.order" || what == "first.order") {
+    } else if(what == "information.first.order" ||
+              what == "information.firstorder"  ||
+              what == "first.order") {
         lav_object_inspect_information(object, information = "first.order",
             augmented = FALSE, inverted = FALSE,
             add.labels = add.labels, add.class = add.class)
@@ -352,11 +436,34 @@ lavInspect.lavaan <- function(object,
         lav_object_inspect_information(object, information = "observed",
             augmented = TRUE, inverted = TRUE,
             add.labels = add.labels, add.class = add.class)
-    } else if(what == "inverted.information.first.order" || 
+    } else if(what == "inverted.information.first.order" ||
               what == "inverted.first.order") {
         lav_object_inspect_information(object, information = "first.order",
             augmented = TRUE, inverted = TRUE,
             add.labels = add.labels, add.class = add.class)
+
+    } else if(what == "h1.information") {
+        lav_object_inspect_h1_information(object, information = "default",
+            h1.information = "default", inverted = FALSE,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "h1.information.expected") {
+        lav_object_inspect_h1_information(object, information = "expected",
+            h1.information = "default", inverted = FALSE,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "h1.information.observed") {
+        lav_object_inspect_h1_information(object, information = "observed",
+            h1.information = "default", inverted = FALSE,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "h1.information.first.order" ||
+              what == "h1.information.firstorder"  ||
+              what == "h1.first.order") {
+        lav_object_inspect_h1_information(object,
+            information = "first.order", h1.information = "default",
+            inverted = FALSE, add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
 
     } else if(what == "vcov") {
         lav_object_inspect_vcov(object,
@@ -375,37 +482,80 @@ lavInspect.lavaan <- function(object,
         lav_object_inspect_vcov(object,
             standardized = TRUE, type = "std.nox",
             add.labels = add.labels, add.class = add.class)
+
     } else if(what == "vcov.def") {
-        lav_object_inspect_vcov_def(object,
+        lav_object_inspect_vcov_def(object, joint = FALSE,
             standardized = FALSE,
             add.labels = add.labels, add.class = add.class)
     } else if(what == "vcov.def.std.all" || what == "vcov.def.standardized" ||
               what == "vcov.def.std") {
-        lav_object_inspect_vcov_def(object,
+        lav_object_inspect_vcov_def(object, joint = FALSE,
             standardized = TRUE, type = "std.all",
             add.labels = add.labels, add.class = add.class)
     } else if(what == "vcov.def.std.lv") {
-        lav_object_inspect_vcov_def(object,
+        lav_object_inspect_vcov_def(object, joint = FALSE,
             standardized = TRUE, type = "std.lv",
             add.labels = add.labels, add.class = add.class)
     } else if(what == "vcov.def.std.nox") {
-        lav_object_inspect_vcov_def(object,
+        lav_object_inspect_vcov_def(object, joint = FALSE,
             standardized = TRUE, type = "std.nox",
             add.labels = add.labels, add.class = add.class)
+
+    } else if(what == "vcov.def.joint") {
+        lav_object_inspect_vcov_def(object, joint = TRUE,
+            standardized = FALSE,
+            add.labels = add.labels, add.class = add.class)
+    } else if(what == "vcov.def.joint.std.all" ||
+              what == "vcov.def.joint.standardized" ||
+              what == "vcov.def.joint.std") {
+        lav_object_inspect_vcov_def(object, joint = TRUE,
+            standardized = TRUE, type = "std.all",
+            add.labels = add.labels, add.class = add.class)
+    } else if(what == "vcov.def.joint.std.lv") {
+        lav_object_inspect_vcov_def(object, joint = TRUE,
+            standardized = TRUE, type = "std.lv",
+            add.labels = add.labels, add.class = add.class)
+    } else if(what == "vcov.def.joint.std.nox") {
+        lav_object_inspect_vcov_def(object, joint = TRUE,
+            standardized = TRUE, type = "std.nox",
+            add.labels = add.labels, add.class = add.class)
+
     } else if(what == "ugamma" || what == "ug" || what == "u.gamma") {
         lav_object_inspect_UGamma(object,
             add.labels = add.labels, add.class = add.class)
+    } else if(what == "ufromugamma" || what == "u") {
+        lav_object_inspect_UfromUGamma(object,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
 
     ### jacobians ####
     } else if(what == "delta") {
         lav_object_inspect_delta(object,
             add.labels = add.labels, add.class = add.class,
             drop.list.single.group = drop.list.single.group)
+    } else if(what == "delta.rownames") {
+        lav_object_inspect_delta_rownames(object,
+            drop.list.single.group = drop.list.single.group)
+
+    ### casewise loglikehoods ###
+    } else if(what == "loglik.casewise") {
+        lav_object_inspect_loglik_casewise(object, log. = TRUE,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "lik.casewise") {
+        lav_object_inspect_loglik_casewise(object, log. = FALSE,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
 
     # multilevel #
     } else if(what == "icc") {
         lav_object_inspect_icc(object,
-            add.labels = add.labels, add.class = add.class)
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
+    } else if(what == "ranef") {
+        lav_object_inspect_ranef(object,
+            add.labels = add.labels, add.class = add.class,
+            drop.list.single.group = drop.list.single.group)
 
     # post-checking
     } else if(what == "post.check" || what == "post") {
@@ -414,6 +564,10 @@ lavInspect.lavaan <- function(object,
     # options
     } else if(what == "options" || what == "lavoptions") {
         object@Options
+
+    # version
+    } else if(what == "version") {
+        object@version
 
     # call
     } else if(what == "call") {
@@ -447,13 +601,17 @@ lavInspect.lavaan <- function(object,
 
 # helper functions (mostly to deal with older 'object' that may have
 # been saved somewhere)
-lav_object_inspect_est <- function(object) {
-    
+lav_object_inspect_est <- function(object, unrotated = FALSE) {
+
     if(inherits(object, "lavaan")) {
         # from 0.5-19, they are in the partable
         if(!is.null(object@ParTable$est)) {
-            OUT <- object@ParTable$est
-        } else if("Fit" %in% slotNames(object)) {
+            if(unrotated) {
+                OUT <- object@ParTable$est.unrotated
+            } else {
+                OUT <- object@ParTable$est
+            }
+        } else if(.hasSlot(object, "Fit")) {
             # in < 0.5-19, we should look in @Fit@est
             OUT <- object@Fit@est
         } else {
@@ -473,11 +631,11 @@ lav_object_inspect_est <- function(object) {
 }
 
 lav_object_inspect_se <- function(object) {
-    
+
     # from 0.5-19, they are in the partable
     if(!is.null(object@ParTable$se)) {
         OUT <- object@ParTable$se
-    } else if("Fit" %in% slotNames(object)) {
+    } else if(.hasSlot(object, "Fit")) {
         # in < 0.5-19, we should look in @Fit@se
         OUT <- object@Fit@se
     } else {
@@ -501,7 +659,13 @@ lav_object_inspect_start <- function(object) {
     OUT
 }
 
-lav_object_inspect_boot <- function(object) {
+lav_object_inspect_boot <- function(object, add.labels = FALSE,
+                                    add.class = FALSE) {
+
+    if(object@Options$se   != "bootstrap" &&
+       !any(c("bootstrap", "bollen.stine") %in% object@Options$test)) {
+        stop("lavaan ERROR: bootstrap was not used.")
+    }
 
     # from 0.5-19. they are in a separate slot
     tmp <- try(slot(object,"boot"), silent = TRUE)
@@ -512,6 +676,16 @@ lav_object_inspect_boot <- function(object) {
     } else {
         # 0.5-19 way
         BOOT <- object@boot$coef
+    }
+
+    # add coef names
+    if(add.labels) {
+        colnames(BOOT) <- names(coef(object))
+    }
+
+    # add class
+    if(add.class) {
+        class(BOOT) <- c("lavaan.matrix", "matrix")
     }
 
     BOOT
@@ -533,7 +707,6 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
                                  lavcache       = object@Cache,
                                  type           = "free",
                                  verbose        = FALSE,
-                                 forcePD        = TRUE,
                                  group.weight   = TRUE,
                                  Delta          = NULL)
     } else if (what == "dx.all") {
@@ -544,22 +717,28 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
                                 lavcache       = object@Cache,
                                 type           = "allofthem",
                                 verbose        = FALSE,
-                                forcePD        = TRUE,
                                 group.weight   = TRUE,
                                 Delta          = NULL)
         names(GLIST) <- names(object@Model@GLIST)
     } else if (what == "std.all") {
-        STD <- standardize.est.all(object)
+        STD <- lav_standardize_all(object)
     } else if (what == "std.lv") {
-        STD <- standardize.est.lv(object)
+        STD <- lav_standardize_lv(object)
     } else if (what == "std.nox") {
-        STD <- standardize.est.all.nox(object)
+        STD <- lav_standardize_all_nox(object)
     } else if(what == "se") {
         SE <- lav_object_inspect_se(object)
     } else if (what == "start") {
         START <- lav_object_inspect_start(object)
     } else if (what == "est") {
         EST <- lav_object_inspect_est(object)
+    } else if(what == "est.unrotated") {
+        if(!is.null(object@Options$rotation) &&
+           object@Options$rotation == "none") {
+            EST <- lav_object_inspect_est(object, unrotated = FALSE)
+        } else {
+            EST <- lav_object_inspect_est(object, unrotated = TRUE)
+        }
     }
 
     for(mm in 1:length(GLIST)) {
@@ -597,7 +776,7 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
             m.user.idx <- object@Model@m.user.idx[[mm]]
             x.user.idx <- object@Model@x.user.idx[[mm]]
             GLIST[[mm]][m.user.idx] <- START[x.user.idx]
-        } else if(what == "est") {
+        } else if(what %in% c("est", "est.unrotated")) {
             # fill in estimated parameter values
             m.user.idx <- object@Model@m.user.idx[[mm]]
             x.user.idx <- object@Model@x.user.idx[[mm]]
@@ -613,7 +792,7 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
             m.user.idx <- object@Model@m.user.idx[[mm]]
             x.user.idx <- object@Model@x.user.idx[[mm]]
             GLIST[[mm]][m.user.idx] <- STD[x.user.idx]
-        } 
+        }
 
         # class
         if(add.class) {
@@ -638,7 +817,7 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
         LABEL <- names(ID)
         for(con in 1:nrow(CON)) {
             # lhs
-            LHS.labels <- all.vars(as.formula(paste("~",CON[con,"lhs"]))) 
+            LHS.labels <- all.vars(as.formula(paste("~",CON[con,"lhs"])))
 
             if(length(LHS.labels) > 0L) {
                 # par id
@@ -670,7 +849,7 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
         # add this info at the top
         #GLIST <- c(constraints = list(CON), GLIST)
         #no, not a good idea, it does not work with list.by.group
-  
+
         # add it as a 'header' attribute?
         attr(CON, "header") <- "Note: model contains equality constraints:"
         con.flag <- TRUE
@@ -684,7 +863,7 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
 
         OUT <- vector("list", length = lavmodel@nblocks)
         for(b in seq_len(lavmodel@nblocks)) {
-            # which mm belong to this block? 
+            # which mm belong to this block?
             mm.in.group <- 1:nmat[b] + cumsum(c(0,nmat))[b]
             mm.names <- names( GLIST[mm.in.group] )
 
@@ -694,10 +873,10 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
         if(lavmodel@nblocks == 1L && drop.list.single.group) {
             OUT <- OUT[[1]]
         } else {
-            if(object@Data@nlevels == 1L && 
+            if(object@Data@nlevels == 1L &&
                length(object@Data@group.label) > 0L) {
                 names(OUT) <- unlist(object@Data@group.label)
-            } else if(object@Data@nlevels > 1L && 
+            } else if(object@Data@nlevels > 1L &&
                       length(object@Data@group.label) == 0L) {
                 names(OUT) <- object@Data@level.label
             }
@@ -724,18 +903,23 @@ lav_object_inspect_modelmatrices <- function(object, what = "free",
 
 # - fixme, should we export this function?
 # - since 0.5-21, conditional.x = TRUE returns residual sample statistics
-#    for ML, we have both joint and residual cov/var/...; but for 
+#    for ML, we have both joint and residual cov/var/...; but for
 #    categorical = TRUE, we only have residual cov/var...; so, we
 #    only return residual in both cases, whenever residual
-# - since 0.6-1, we extract the values from the @h1 slot (if present)
-lav_object_inspect_sampstat <- function(object, h1 = FALSE,
+# - since 0.6-3, we always extract the values from the @h1 slot (if present)
+#   if meanstructure = FALSE, do NOT include $mean elements any longer
+lav_object_inspect_sampstat <- function(object, h1 = TRUE,
+    std = FALSE,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
     nblocks <- object@Model@nblocks
     ov.names <- object@pta$vnames$ov
     ov.names.res <- object@pta$vnames$ov.nox
     ov.names.x   <- object@pta$vnames$ov.x
+
+    # slots
     lavsamplestats <- object@SampleStats
+    lavmodel <- object@Model
 
     # if nlevels, override h1 to be TRUE
     if(object@Data@nlevels > 1L) {
@@ -743,7 +927,7 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
     }
 
     # check if we have a non-empty @h1 slot
-    if(!"h1" %in% slotNames(object)) {
+    if(!.hasSlot(object, "h1")) {
         h1 <- FALSE
     } else if(length(object@h1) == 0L) {
         h1 <- FALSE
@@ -759,7 +943,7 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
     OUT <- vector("list", length = nblocks)
     for(b in seq_len(nblocks)) {
 
-        if(!object@Model@conditional.x) {
+        if(!lavmodel@conditional.x) {
 
             # covariance matrix
             if(h1) {
@@ -767,8 +951,12 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
             } else {
                 OUT[[b]]$cov  <- lavsamplestats@cov[[b]]
             }
+            if(std) {
+                diag.orig <- diag(OUT[[b]]$cov)
+                OUT[[b]]$cov <- cov2cor(OUT[[b]]$cov)
+            }
             if(add.labels && !is.null(OUT[[b]]$cov)) {
-                rownames(OUT[[b]]$cov) <- colnames(OUT[[b]]$cov) <- 
+                rownames(OUT[[b]]$cov) <- colnames(OUT[[b]]$cov) <-
                     ov.names[[b]]
             }
             if(add.class) {
@@ -776,29 +964,36 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
             }
 
             # mean vector
-            if(h1) {
-                OUT[[b]]$mean <- as.numeric(H1$mean[[b]])
-            } else {
-                OUT[[b]]$mean <- as.numeric(lavsamplestats@mean[[b]])
-            }
-            if(add.labels) {
-                names(OUT[[b]]$mean) <- ov.names[[b]]
-            }
-            if(add.class) {
-                class(OUT[[b]]$mean) <- c("lavaan.vector", "numeric")
+            if(lavmodel@meanstructure) {
+                if(h1) {
+                    OUT[[b]]$mean <- as.numeric(H1$mean[[b]])
+                } else {
+                    OUT[[b]]$mean <- as.numeric(lavsamplestats@mean[[b]])
+                }
+                if(std) {
+                    diag.orig[ diag.orig < .Machine$double.eps ] <- NA
+                    OUT[[b]]$mean <- OUT[[b]]$mean/sqrt(diag.orig)
+                }
+                if(add.labels) {
+                    names(OUT[[b]]$mean) <- ov.names[[b]]
+                }
+                if(add.class) {
+                    class(OUT[[b]]$mean) <- c("lavaan.vector", "numeric")
+                }
             }
 
             # thresholds
-            if(object@Model@categorical) {
+            if(lavmodel@categorical) {
                 if(h1) {
                     OUT[[b]]$th <- as.numeric(H1$th[[b]])
                 } else {
                     OUT[[b]]$th <- as.numeric(lavsamplestats@th[[b]])
                 }
-                if(length(object@Model@num.idx[[b]]) > 0L) {
-                    NUM.idx <- which(object@Model@th.idx[[b]] == 0)
+                if(length(lavmodel@num.idx[[b]]) > 0L) {
+                    NUM.idx <- which(lavmodel@th.idx[[b]] == 0)
                     OUT[[b]]$th <- OUT[[b]]$th[ -NUM.idx ]
                 }
+                # FIXME: what to do if std = TRUE (depends on delta/theta)
                 if(add.labels) {
                     names(OUT[[b]]$th) <- object@pta$vnames$th[[b]]
                 }
@@ -816,21 +1011,29 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
             } else {
                 OUT[[b]]$res.cov  <- lavsamplestats@res.cov[[b]]
             }
+            if(std) {
+                diag.orig <- diag(OUT[[b]]$res.cov)
+                OUT[[b]]$res.cov <- cov2cor(OUT[[b]]$res.cov)
+            }
             if(add.labels) {
-                rownames(OUT[[b]]$res.cov) <- colnames(OUT[[b]]$res.cov) <- 
+                rownames(OUT[[b]]$res.cov) <- colnames(OUT[[b]]$res.cov) <-
                     ov.names.res[[b]]
             }
             if(add.class) {
-                class(OUT[[b]]$res.cov) <- 
+                class(OUT[[b]]$res.cov) <-
                     c("lavaan.matrix.symmetric", "matrix")
             }
-   
+
             # intercepts
-            if(object@Model@meanstructure) {
+            if(lavmodel@meanstructure) {
                 if(h1) {
                     OUT[[b]]$res.int <- as.numeric(H1$res.int[[b]])
                 } else {
                     OUT[[b]]$res.int <- as.numeric(lavsamplestats@res.int[[b]])
+                }
+                if(std) {
+                    diag.orig[ diag.orig < .Machine$double.eps ] <- NA
+                    OUT[[b]]$res.int <- OUT[[b]]$res.int/sqrt(diag.orig)
                 }
                 if(add.labels) {
                     names(OUT[[b]]$res.int) <- ov.names.res[[b]]
@@ -841,16 +1044,17 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
             }
 
             # thresholds
-            if(object@Model@categorical) {
+            if(lavmodel@categorical) {
                 if(h1) {
                     OUT[[b]]$res.th <- as.numeric(H1$res.th[[b]])
                 } else {
                     OUT[[b]]$res.th <- as.numeric(lavsamplestats@res.th[[b]])
                 }
-                if(length(object@Model@num.idx[[b]]) > 0L) {
-                    NUM.idx <- which(object@Model@th.idx[[b]] == 0)
+                if(length(lavmodel@num.idx[[b]]) > 0L) {
+                    NUM.idx <- which(lavmodel@th.idx[[b]] == 0)
                     OUT[[b]]$res.th <- OUT[[b]]$res.th[ -NUM.idx ]
                 }
+                # FIXME: if std: what to do?
                 if(add.labels) {
                     names(OUT[[b]]$res.th) <- object@pta$vnames$th[[b]]
                 }
@@ -860,11 +1064,21 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
             }
 
             # slopes
-            if(object@Model@nexo > 0L) {
+            if(lavmodel@nexo[b] > 0L) {
                 if(h1) {
                     OUT[[b]]$res.slopes  <- H1$res.slopes[[b]]
                 } else {
                     OUT[[b]]$res.slopes  <- lavsamplestats@res.slopes[[b]]
+                }
+                # FIXME: if std: what to do? (here: b.z = b * s.x /s.y)
+                if(std) {
+                    tmp.y <- matrix(sqrt(diag.orig),
+                                    nrow(OUT[[b]]$res.slopes),
+                                    ncol(OUT[[b]]$res.slopes))
+                    tmp.x <- matrix(sqrt(diag(lavsamplestats@cov.x[[b]])),
+                                    nrow(OUT[[b]]$res.slopes),
+                                    ncol(OUT[[b]]$res.slopes), byrow = TRUE)
+                    OUT[[b]]$res.slopes <- OUT[[b]]$res.slopes / tmp.y * tmp.x
                 }
                 if(add.labels) {
                     rownames(OUT[[b]]$res.slopes) <- ov.names.res[[b]]
@@ -876,29 +1090,44 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
             }
 
             # cov.x
-            if(object@Model@nexo > 0L) {
-                if(h1) {
-                    OUT[[b]]$cov.x  <- H1$cov.x[[b]]
-                } else {
-                    OUT[[b]]$cov.x  <- lavsamplestats@cov.x[[b]]
+            if(lavmodel@nexo[b] > 0L) {
+                OUT[[b]]$cov.x  <- lavsamplestats@cov.x[[b]]
+                if(std) {
+                    diag.orig <- diag(OUT[[b]]$cov.x)
+                    OUT[[b]]$cov.x <- cov2cor(OUT[[b]]$cov.x)
                 }
                 if(add.labels) {
                     rownames(OUT[[b]]$cov.x) <- ov.names.x[[b]]
                     colnames(OUT[[b]]$cov.x) <- ov.names.x[[b]]
                 }
                 if(add.class) {
-                    class(OUT[[b]]$cov.x) <- 
+                    class(OUT[[b]]$cov.x) <-
                         c("lavaan.matrix.symmetric", "matrix")
+                }
+            }
+
+            # mean.x
+            if(lavmodel@nexo[b] > 0L) {
+                OUT[[b]]$mean.x <- as.numeric(object@SampleStats@mean.x[[b]])
+                if(std) {
+                    diag.orig[ diag.orig < .Machine$double.eps ] <- NA
+                    OUT[[b]]$mean.x <- OUT[[b]]$mean.x/sqrt(diag.orig)
+                }
+                if(add.labels) {
+                    names(OUT[[b]]$mean.x) <- ov.names.x[[b]]
+                }
+                if(add.class) {
+                    class(OUT[[b]]$mean.x) <- c("lavaan.vector", "numeric")
                 }
             }
 
         } # conditional.x
 
         # stochastic weights
-        if(object@Model@group.w.free) {
-            # to be consistent with the 'implied' values, 
+        if(lavmodel@group.w.free) {
+            # to be consistent with the 'implied' values,
             # transform so group.w is the 'log(group.freq)'
-            OUT[[b]]$group.w <- 
+            OUT[[b]]$group.w <-
                 log(lavsamplestats@group.w[[b]] * lavsamplestats@ntotal)
             if(add.labels) {
                 names(OUT[[b]]$group.w) <- "w"
@@ -912,7 +1141,7 @@ lav_object_inspect_sampstat <- function(object, h1 = FALSE,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L && 
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -929,11 +1158,24 @@ lav_object_inspect_data <- function(object, add.labels = FALSE,
                                     drop.list.single.group = FALSE) {
 
     G <- object@Data@ngroups
-    OUT <- object@Data@X
+    if(object@Model@conditional.x) {
+        OUT <- vector("list", length = G)
+        for(g in 1:G) {
+            OUT[[g]] <- cbind(object@Data@X[[g]],
+                              object@Data@eXo[[g]])
+        }
+    } else {
+        OUT <- object@Data@X
+    }
 
     if(add.labels) {
         for(g in 1:G) {
-            colnames(OUT[[g]]) <- object@Data@ov.names[[g]]
+            if(object@Model@conditional.x) {
+                colnames(OUT[[g]]) <- c(object@Data@ov.names[[g]],
+                                        object@Data@ov.names.x[[g]])
+            } else {
+                colnames(OUT[[g]]) <- object@Data@ov.names[[g]]
+            }
         }
     }
 
@@ -950,8 +1192,8 @@ lav_object_inspect_data <- function(object, add.labels = FALSE,
 
 lav_object_inspect_case_idx <- function(object,
                                         drop.list.single.group = FALSE) {
-
     G <- object@Data@ngroups
+
     OUT <- object@Data@case.idx
 
     if(G == 1L && drop.list.single.group) {
@@ -965,6 +1207,122 @@ lav_object_inspect_case_idx <- function(object,
     OUT
 }
 
+#lav_object_inspect_case_idx <- function(object, level = 1L,
+#                                        drop.list.single.group = FALSE) {
+#    #FIXME: if lavaan ever allows 3-level or cross-classifed models,
+#    #      "level=" should be a character indicating the clustering variable
+#
+#    G <- object@Data@ngroups
+#    nlevels <- object@Data@nlevels
+#    if (nlevels == 1L) level <- 1L # if what="cluster.idx" for single-level model
+#
+#    if (level == 2L) {
+#        # level-2 (cluster) IDs
+#        OUT <- lapply(object@Data@Lp, function(gg) gg$cluster.id[[2]][ gg$cluster.idx[[2]] ])
+#        #FIXME: update if lavaan ever accepts 3-level or cross-classified models
+#
+#    } else OUT <- object@Data@case.idx # level-1 (casewise) IDs
+#
+#    if(G == 1L && drop.list.single.group) {
+#        OUT <- OUT[[1]]
+#    } else {
+#        if(length(object@Data@group.label) > 0L) {
+#            names(OUT) <- unlist(object@Data@group.label)
+#        }
+#    }
+#    OUT
+#}
+#
+
+# cluster info
+lav_object_inspect_cluster_info <- function(object, what = "cluster.size",
+                                            level = 2L,
+                                            drop.list.single.group = FALSE) {
+
+    G <- object@Data@ngroups
+    nlevels <- object@Data@nlevels
+
+    # just in case we have no clusters
+    if(nlevels == 1L) {
+        if(what %in% c("nclusters", "ncluster.size", "cluster.id")) {
+            OUT <- as.list(rep(1L, G))
+        } else if(what %in% c("cluster.size", "cluster.sizes")) {
+            OUT <- object@Data@nobs
+        } else if(what %in% c("cluster.idx", "cluster.label")) {
+            # everybody belongs to cluster 1
+            OUT <- lapply(seq_len(G),
+                          function(gg) rep(1L, object@Data@nobs[[gg]]))
+        }
+    }
+
+    # if we do have clusters
+    if(nlevels > 1L) {
+        OUT <- vector("list", length = G)
+
+        for(g in seq_len(G)) {
+            Lp <- object@Data@Lp[[g]]
+            if(what == "nclusters") {
+                OUT[[g]] <- Lp$nclusters[[level]]
+            } else if(what == "ncluster.size") {
+                OUT[[g]] <- Lp$ncluster.size[[level]]
+            } else if(what == "cluster.size") {
+                OUT[[g]] <- Lp$cluster.size[[level]]
+            } else if(what == "cluster.id") {
+                OUT[[g]] <- Lp$cluster.id[[level]]
+            } else if(what == "cluster.idx") {
+                OUT[[g]] <- Lp$cluster.idx[[level]]
+            } else if(what == "cluster.label") {
+                OUT[[g]] <- Lp$cluster.id[[level]][ Lp$cluster.idx[[level]] ]
+            } else if(what == "cluster.sizes") {
+                OUT[[g]] <- Lp$cluster.sizes[[level]]
+            } else if(what == "average.cluster.size") {
+                Ng <- object@Data@nobs[[g]]
+                cluster.size <- Lp$cluster.size[[level]]
+                nclusters <- Lp$nclusters[[level]]
+                OUT[[g]] <- (Ng^2 - sum(cluster.size^2)) / (Ng*(nclusters - 1L))
+            }
+        } # g
+    } # nlevels > 1L
+
+    if(G == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else {
+        if(length(object@Data@group.label) > 0L) {
+            names(OUT) <- unlist(object@Data@group.label)
+        }
+    }
+
+    OUT
+}
+
+
+# count the number of clusters, or obtain N within each cluster
+#lav_object_inspect_ncluster <- function(object, sizes = FALSE, #level = 2L,
+#                                        drop.list.single.group = FALSE) {
+#    G <- object@Data@ngroups
+#    nlevels <- object@Data@nlevels
+#
+#    if (nlevels == 1L) {
+#      # single-level model, return sample size(s) or count 1 cluster per group
+#      OUT <- if (sizes) unlist(object@Data@nobs) else rep(1L, G)
+#
+#    } else if (sizes) {
+#      # for each group, a vector of cluster sizes
+#      OUT <- lapply(object@Data@Lp, function(gg) gg$cluster.size[[2]])
+#      #FIXME: update if lavaan ever accepts 3-level or cross-classified models
+#
+#      if (G == 1L && drop.list.single.group) OUT <- OUT[[1]]
+#
+#    } else {
+#      # number of clusters in each group
+#      OUT <- sapply(object@Data@Lp, function(gg) gg$nclusters[[2]])
+#      #FIXME: update if lavaan ever accepts 3-level or cross-classified models
+#    }
+#
+#    # assign group names, if applicable
+#    if (G > 1L) names(OUT) <- unlist(object@Data@group.label)
+#    OUT
+#}
 
 lav_object_inspect_rsquare <- function(object, est.std.all=NULL,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
@@ -973,7 +1331,7 @@ lav_object_inspect_rsquare <- function(object, est.std.all=NULL,
     OUT <- vector("list", length = nblocks)
 
     if(is.null(est.std.all)) {
-        est.std.all <- standardize.est.all(object)
+        est.std.all <- lav_standardize_all(object)
     }
 
     partable <- object@ParTable
@@ -982,9 +1340,9 @@ lav_object_inspect_rsquare <- function(object, est.std.all=NULL,
     partable$rsquare[partable$rsquare > 1.0] <- as.numeric(NA)
 
     for(b in seq_len(nblocks)) {
-        ind.names <- partable$rhs[ which(partable$op == "=~" & 
+        ind.names <- partable$rhs[ which(partable$op == "=~" &
                                          partable$block == b) ]
-        eqs.y.names <- partable$lhs[ which(partable$op == "~"  & 
+        eqs.y.names <- partable$lhs[ which(partable$op == "~"  &
                                            partable$block == b) ]
         y.names <- unique( c(ind.names, eqs.y.names) )
 
@@ -1005,16 +1363,16 @@ lav_object_inspect_rsquare <- function(object, est.std.all=NULL,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L && 
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
-        } else if(object@Data@nlevels > 1L && 
+        } else if(object@Data@nlevels > 1L &&
                   length(object@Data@group.label) == 0L) {
             names(OUT) <- object@Data@level.label
         }
     }
 
-    OUT 
+    OUT
 }
 
 # model implied sample stats
@@ -1025,12 +1383,15 @@ lav_object_inspect_implied <- function(object,
     ov.names <- object@pta$vnames$ov
     ov.names.res <- object@pta$vnames$ov.nox
     ov.names.x   <- object@pta$vnames$ov.x
+
+    # slots
     lavimplied <- object@implied
+    lavmodel   <- object@Model
 
     OUT <- vector("list", length = nblocks)
     for(b in seq_len(nblocks)) {
 
-        if(!object@Model@conditional.x) {
+        if(!lavmodel@conditional.x) {
 
             # covariance matrix
             OUT[[b]]$cov  <- lavimplied$cov[[b]]
@@ -1043,16 +1404,18 @@ lav_object_inspect_implied <- function(object,
             }
 
             # mean vector
-            OUT[[b]]$mean <- as.numeric(lavimplied$mean[[b]])
-            if(add.labels) {
-                names(OUT[[b]]$mean) <- ov.names[[b]]
-            }
-            if(add.class) {
-                class(OUT[[b]]$mean) <- c("lavaan.vector", "numeric")
+            if(lavmodel@meanstructure) {
+                OUT[[b]]$mean <- as.numeric(lavimplied$mean[[b]])
+                if(add.labels) {
+                    names(OUT[[b]]$mean) <- ov.names[[b]]
+                }
+                if(add.class) {
+                    class(OUT[[b]]$mean) <- c("lavaan.vector", "numeric")
+                }
             }
 
             # thresholds
-            if(object@Model@categorical) {
+            if(lavmodel@categorical) {
                 OUT[[b]]$th <- as.numeric(lavimplied$th[[b]])
                 if(length(object@Model@num.idx[[b]]) > 0L) {
                     NUM.idx <- which(object@Model@th.idx[[b]] == 0)
@@ -1081,7 +1444,7 @@ lav_object_inspect_implied <- function(object,
             }
 
             # intercepts
-            if(object@Model@meanstructure) {
+            if(lavmodel@meanstructure) {
                 OUT[[b]]$res.int <- as.numeric(lavimplied$res.int[[b]])
                 if(add.labels) {
                     names(OUT[[b]]$res.int) <- ov.names.res[[b]]
@@ -1092,7 +1455,7 @@ lav_object_inspect_implied <- function(object,
             }
 
             # thresholds
-            if(object@Model@categorical) {
+            if(lavmodel@categorical) {
                 OUT[[b]]$res.th <- as.numeric(lavimplied$res.th[[b]])
                 if(length(object@Model@num.idx[[b]]) > 0L) {
                     NUM.idx <- which(object@Model@th.idx[[b]] == 0)
@@ -1107,7 +1470,7 @@ lav_object_inspect_implied <- function(object,
             }
 
             # slopes
-            if(object@Model@nexo > 0L) {
+            if(lavmodel@nexo[b] > 0L) {
                 OUT[[b]]$res.slopes  <- lavimplied$res.slopes[[b]]
                 if(add.labels) {
                     rownames(OUT[[b]]$res.slopes) <- ov.names.res[[b]]
@@ -1119,7 +1482,7 @@ lav_object_inspect_implied <- function(object,
             }
 
             # cov.x
-            if(object@Model@nexo > 0L) {
+            if(lavmodel@nexo[b] > 0L) {
                 OUT[[b]]$cov.x  <- object@SampleStats@cov.x[[b]]
                 if(add.labels) {
                     rownames(OUT[[b]]$cov.x) <- ov.names.x[[b]]
@@ -1131,10 +1494,22 @@ lav_object_inspect_implied <- function(object,
                 }
             }
 
+            # mean.x
+            if(lavmodel@nexo[b] > 0L) {
+                OUT[[b]]$mean.x  <- as.numeric(object@SampleStats@mean.x[[b]])
+                if(add.labels) {
+                    names(OUT[[b]]$mean.x) <- ov.names.x[[b]]
+                }
+                if(add.class) {
+                    class(OUT[[b]]$mean.x) <- c("lavaan.vector", "numeric")
+                }
+            }
+
+
         } # conditional.x
 
         # stochastic weights
-        if(object@Model@group.w.free) {
+        if(lavmodel@group.w.free) {
             OUT[[b]]$group.w <- lavimplied$group.w[[b]]
             if(add.labels) {
                 names(OUT[[b]]$group.w) <- "w" # somewhat redundant
@@ -1148,10 +1523,10 @@ lav_object_inspect_implied <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L && 
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
-        } else if(object@Data@nlevels > 1L && 
+        } else if(object@Data@nlevels > 1L &&
                   length(object@Data@group.label) == 0L) {
             names(OUT) <- object@Data@level.label
         }
@@ -1165,115 +1540,9 @@ lav_object_inspect_implied <- function(object,
 lav_object_inspect_residuals <- function(object, h1 = TRUE,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
-   # unstandardized residuals
-    obsList <- lav_object_inspect_sampstat(object, h1 = h1,
-                                           add.labels = add.labels,
-                                           add.class  = FALSE,
-                                           drop.list.single.group = FALSE)
-    estList <- lav_object_inspect_implied(object,
-                                          add.labels = add.labels,
-                                          add.class  = FALSE,
-                                          drop.list.single.group = FALSE)
-    # blocks
-    nblocks <- length(obsList)
-
-    resList <- vector("list", length = nblocks)
-    for(b in seq_len(nblocks)) {
-        if(object@Model@conditional.x) {
-            if(!is.null(estList[[b]]$res.cov)) {
-                resList[[b]]$res.cov <- ( obsList[[b]]$res.cov -
-                                          estList[[b]]$res.cov )
-                if(add.class) {
-                    class(resList[[b]]$res.cov) <- 
-                        c("lavaan.matrix.symmetric", "matrix")
-                }
-            }
-            if(!is.null(estList[[b]]$res.int)) {
-                 resList[[b]]$res.int <- ( obsList[[b]]$res.int -
-                                           estList[[b]]$res.int )
-                if(add.class) {
-                    class(resList[[b]]$res.int) <-
-                        c("lavaan.vector", "numeric")
-                }
-            }
-            if(!is.null(estList[[b]]$res.th)) {
-                resList[[b]]$res.th  <- ( obsList[[b]]$res.th  -
-                                          estList[[b]]$res.th )
-                if(add.class) {
-                    class(resList[[b]]$res.th) <-
-                        c("lavaan.vector", "numeric")
-                }
-            }
-            if(!is.null(estList[[b]]$res.slopes)) {
-                resList[[b]]$res.slopes <- ( obsList[[b]]$res.slopes -
-                                             estList[[b]]$res.slopes )
-                if(add.class) {
-                    class(resList[[b]]$res.slopes) <-
-                        c("lavaan.matrix", "matrix")
-                }
-            }
-            if(!is.null(estList[[b]]$cov.x)) {
-                resList[[b]]$cov.x  <- ( obsList[[b]]$cov.x  -
-                                         estList[[b]]$cov.x )
-                if(add.class) {
-                    class(resList[[b]]$cov.x) <- 
-                        c("lavaan.matrix.symmetric", "matrix")
-                }
-            }
-
-        # unconditional
-        } else {
-            if(!is.null(estList[[b]]$cov)) {
-                resList[[b]]$cov <- ( obsList[[b]]$cov -
-                                      estList[[b]]$cov )
-                if(add.class) {
-                    class(resList[[b]]$cov) <- 
-                        c("lavaan.matrix.symmetric", "matrix")
-                }
-            }
-            if(!is.null(estList[[b]]$mean)) {
-                 resList[[b]]$mean <- ( obsList[[b]]$mean -
-                                        estList[[b]]$mean )
-                 if(add.class) {
-                    class(resList[[b]]$mean) <-
-                        c("lavaan.vector", "numeric")
-                 }
-            }
-            if(!is.null(estList[[b]]$th)) {
-                resList[[b]]$th  <- ( obsList[[b]]$th  -
-                                      estList[[b]]$th )
-                if(add.class) {
-                    class(resList[[b]]$th) <-
-                        c("lavaan.vector", "numeric")
-                }
-            }
-        }
-
-        # free group.w
-        if(!is.null(estList[[b]]$group.w)) {
-            resList[[b]]$group.w <- ( obsList[[b]]$group.w  - 
-                                      estList[[b]]$group.w )
-            if(add.class) {
-                class(resList[[b]]$group.w) <-
-                    c("lavaan.vector", "numeric")
-            }
-        }
-    }
-
-    OUT <- resList
-    if(nblocks == 1L && drop.list.single.group) {
-        OUT <- OUT[[1]]
-    } else {
-        if(object@Data@nlevels == 1L &&
-           length(object@Data@group.label) > 0L) {
-            names(OUT) <- unlist(object@Data@group.label)
-        } else if(object@Data@nlevels > 1L &&
-                  length(object@Data@group.label) == 0L) {
-            names(OUT) <- object@Data@level.label
-        }
-    }
-
-    OUT
+    lav_residuals(object, type = "raw", h1 = h1,
+                  add.labels = add.labels, add.class = add.class,
+                  drop.list.single.group = drop.list.single.group)
 }
 
 
@@ -1295,7 +1564,7 @@ lav_object_inspect_cov_lv <- function(object, correlation.metric = FALSE,
         }
 
         if(add.labels) {
-            colnames(OUT[[b]]) <- rownames(OUT[[b]]) <- 
+            colnames(OUT[[b]]) <- rownames(OUT[[b]]) <-
                 object@pta$vnames$lv[[b]]
         }
 
@@ -1307,7 +1576,7 @@ lav_object_inspect_cov_lv <- function(object, correlation.metric = FALSE,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-          if(object@Data@nlevels == 1L &&    
+          if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1323,7 +1592,7 @@ lav_object_inspect_mean_lv <- function(object,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
     # compute lv means
-    OUT <- computeEETA(lavmodel       = object@Model, 
+    OUT <- computeEETA(lavmodel       = object@Model,
                        lavsamplestats = object@SampleStats,
                        remove.dummy.lv = TRUE)
 
@@ -1336,7 +1605,7 @@ lav_object_inspect_mean_lv <- function(object,
     # labels + class
     for(b in seq_len(nblocks)) {
         if(add.labels && length(OUT[[b]]) > 0L) {
-            names(OUT[[b]]) <- object@pta$vnames$lv.regular[[b]]
+            names(OUT[[b]]) <- object@pta$vnames$lv[[b]]
         }
         if(add.class) {
             class(OUT[[b]]) <- c("lavaan.vector", "numeric")
@@ -1346,7 +1615,7 @@ lav_object_inspect_mean_lv <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1362,7 +1631,7 @@ lav_object_inspect_cov_all <- function(object, correlation.metric = FALSE,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
     # compute extended model implied covariance matrix (both ov and lv)
-    OUT <- computeCOV(lavmodel = object@Model, 
+    OUT <- computeCOV(lavmodel = object@Model,
                       remove.dummy.lv = TRUE)
 
     # nblocks
@@ -1378,7 +1647,7 @@ lav_object_inspect_cov_all <- function(object, correlation.metric = FALSE,
 
         if(add.labels) {
             NAMES <- c(object@pta$vnames$ov.model[[b]],
-                       object@pta$vnames$lv.regular[[b]])
+                       object@pta$vnames$lv[[b]])
             colnames(OUT[[b]]) <- rownames(OUT[[b]]) <- NAMES
         }
         if(add.class) {
@@ -1389,7 +1658,7 @@ lav_object_inspect_cov_all <- function(object, correlation.metric = FALSE,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1416,14 +1685,14 @@ lav_object_inspect_cov_ov <- function(object, correlation.metric = FALSE,
 
     # cor + labels + class
     for(b in seq_len(nblocks)) {
- 
+
         if(correlation.metric && nrow(OUT[[b]]) > 1L) {
             # note: cov2cor fails if matrix is empty!
             OUT[[b]] <- cov2cor(OUT[[b]])
         }
 
         if(add.labels) {
-            colnames(OUT[[b]]) <- rownames(OUT[[b]]) <- 
+            colnames(OUT[[b]]) <- rownames(OUT[[b]]) <-
                 object@pta$vnames$ov.model[[b]]
         }
         if(add.class) {
@@ -1434,7 +1703,7 @@ lav_object_inspect_cov_ov <- function(object, correlation.metric = FALSE,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1449,7 +1718,7 @@ lav_object_inspect_cov_ov <- function(object, correlation.metric = FALSE,
 lav_object_inspect_mean_ov <- function(object,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
-    # compute lv means
+    # compute ov means
     if(object@Model@conditional.x) {
         OUT <- object@implied$res.int
     } else {
@@ -1458,7 +1727,7 @@ lav_object_inspect_mean_ov <- function(object,
 
     # nblocks
     nblocks <- length(OUT)
-   
+
     # make numeric
     OUT <- lapply(OUT, as.numeric)
 
@@ -1475,7 +1744,7 @@ lav_object_inspect_mean_ov <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1520,7 +1789,41 @@ lav_object_inspect_th <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
+           length(object@Data@group.label) > 0L) {
+            names(OUT) <- unlist(object@Data@group.label)
+        } else if(object@Data@nlevels > 1L &&
+                  length(object@Data@group.label) == 0L) {
+            names(OUT) <- object@Data@level.label
+        }
+    }
+
+    OUT
+}
+
+lav_object_inspect_th_idx <- function(object,
+    add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
+
+    # thresholds idx
+    OUT <- object@SampleStats@th.idx
+
+    # nblocks
+    nblocks <- length(OUT)
+
+    # labels + class
+    for(b in seq_len(nblocks)) {
+        if(add.labels && length(OUT[[b]]) > 0L) {
+            names(OUT[[b]]) <- object@SampleStats@th.names[[b]]
+        }
+        if(add.class && !is.null(OUT[[b]])) {
+            class(OUT[[b]]) <- c("lavaan.vector", "numeric")
+        }
+    }
+
+    if(nblocks == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else {
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1540,7 +1843,7 @@ lav_object_inspect_vy <- function(object,
     #  - 1.0 (or delta^2) if categorical
     #  - if also Gamma, cov.x is used (only if categorical)
 
-    OUT <- computeVY(lavmodel = object@Model, GLIST = NULL, 
+    OUT <- computeVY(lavmodel = object@Model, GLIST = NULL,
                      diagonal.only = TRUE)
 
     # nblocks
@@ -1563,7 +1866,7 @@ lav_object_inspect_vy <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1587,13 +1890,17 @@ lav_object_inspect_theta <- function(object, correlation.metric = FALSE,
 
     # labels + class
     for(b in seq_len(nblocks)) {
-        
+
         if(correlation.metric && nrow(OUT[[b]]) > 0L) {
-            OUT[[b]] <- cov2cor(OUT[[b]])
+            if(all(OUT[[b]] == 0)) {
+                OUT[[b]] <- OUT[[b]]
+            } else {
+                OUT[[b]] <- cov2cor(OUT[[b]])
+            }
         }
 
         if(add.labels && length(OUT[[b]]) > 0L) {
-            colnames(OUT[[b]]) <- rownames(OUT[[b]]) <- 
+            colnames(OUT[[b]]) <- rownames(OUT[[b]]) <-
                 object@pta$vnames$ov.model[[b]]
         }
 
@@ -1605,7 +1912,7 @@ lav_object_inspect_theta <- function(object, correlation.metric = FALSE,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1622,10 +1929,8 @@ lav_object_inspect_missing_coverage <- function(object,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
     G <- object@Data@ngroups
-
-    # get missing covarage
     OUT <- vector("list", G)
-   
+
     for(g in 1:G) {
         if(!is.null(object@Data@Mp[[g]])) {
             OUT[[g]] <- object@Data@Mp[[g]]$coverage
@@ -1659,10 +1964,8 @@ lav_object_inspect_missing_patterns <- function(object,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
     G <- object@Data@ngroups
-
-    # get missing covarage
     OUT <- vector("list", G)
-   
+
     for(g in 1:G) {
         if(!is.null(object@Data@Mp[[g]])) {
             OUT[[g]] <- object@Data@Mp[[g]]$pat
@@ -1694,7 +1997,7 @@ lav_object_inspect_missing_patterns <- function(object,
 
 lav_object_inspect_empty_idx <- function(object,
                                          drop.list.single.group = FALSE) {
-   
+
     G <- object@Data@ngroups
 
     # get empty idx
@@ -1707,7 +2010,7 @@ lav_object_inspect_empty_idx <- function(object,
             OUT[[g]] <- integer(0L)
         }
     }
-    
+
     if(G == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
@@ -1742,7 +2045,7 @@ lav_object_inspect_wls_est <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1776,7 +2079,7 @@ lav_object_inspect_wls_obs <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1791,10 +2094,14 @@ lav_object_inspect_wls_obs <- function(object,
 lav_object_inspect_wls_v <- function(object,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
-    OUT <- lav_model_wls_v(lavmodel       = object@Model,
-                           lavsamplestats = object@SampleStats,
-                           structured     = TRUE,
-                           lavdata        = object@Data)
+    #OUT <- lav_model_wls_v(lavmodel       = object@Model,
+    #                       lavsamplestats = object@SampleStats,
+    #                       structured     = TRUE,
+    #                       lavdata        = object@Data)
+    # WLS.V == (traditionally) h1 expected information
+    OUT <- lav_model_h1_information_expected(lavobject = object)
+    # this affects fit measures gfi, agfi, pgfi
+
 
     # nblocks
     nblocks <- length(OUT)
@@ -1802,7 +2109,7 @@ lav_object_inspect_wls_v <- function(object,
     # if estimator == "DWLS" or "ULS", we only stored the diagonal
     # hence, we create a full matrix here
     if(object@Options$estimator %in% c("DWLS", "ULS")) {
-        OUT <- lapply(OUT, 
+        OUT <- lapply(OUT,
             function(x) { nr = NROW(x); diag(x, nrow=nr, ncol=nr) })
     }
 
@@ -1821,7 +2128,7 @@ lav_object_inspect_wls_v <- function(object,
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(object@Data@nlevels == 1L &&    
+        if(object@Data@nlevels == 1L &&
            length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
         } else if(object@Data@nlevels > 1L &&
@@ -1848,10 +2155,17 @@ lav_object_inspect_sampstat_gamma <- function(object,
 
     if(nblocks == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
+        if(add.class) {
+            class(OUT) <- c("lavaan.matrix.symmetric", "matrix")
+        }
     } else {
-        if(object@Data@nlevels == 1L &&    
-           length(object@Data@group.label) > 0L) {
+        if(object@Data@nlevels == 1L && length(object@Data@group.label) > 0L) {
             names(OUT) <- unlist(object@Data@group.label)
+            if(add.class) {
+                for(g in seq_len(object@Data@ngroups)) {
+                    class(OUT[[g]]) <- c("lavaan.matrix.symmetric", "matrix")
+                }
+            }
         } else if(object@Data@nlevels > 1L &&
                   length(object@Data@group.label) == 0L) {
             names(OUT) <- object@Data@level.label
@@ -1863,44 +2177,113 @@ lav_object_inspect_sampstat_gamma <- function(object,
 
 
 lav_object_inspect_gradient <- function(object,
-    add.labels = FALSE, add.class = FALSE) {
+    add.labels = FALSE, add.class = FALSE, logl = FALSE,
+    optim = FALSE) {
 
-    if(object@SampleStats@missing.flag ||
+    lavmodel       <- object@Model
+    lavdata        <- object@Data
+    lavsamplestats <- object@SampleStats
+
+    if(optim) {
+        logl <- FALSE
+    }
+
+    if(lavsamplestats@missing.flag ||
        object@Options$estimator == "PML") {
         group.weight <- FALSE
     } else {
         group.weight <- TRUE
     }
 
-    OUT <- lav_model_gradient(lavmodel       = object@Model,
+    dx <- lav_model_gradient(lavmodel       = lavmodel,
                               GLIST          = NULL,
-                              lavsamplestats = object@SampleStats,
+                              lavsamplestats = lavsamplestats,
                               lavdata        = object@Data,
                               lavcache       = object@Cache,
                               type           = "free",
                               verbose        = FALSE,
                               group.weight   = group.weight)
 
+    # if logl, rescale to get gradient wrt the loglikelihood
+    if(logl) {
+        if(lavmodel@estimator %in% c("ML")) {
+            if(lavdata@nlevels == 1L) {
+                # currently, this is just a sign switch
+                dx <- -1 * dx
+            } else {
+                lavpartable <- object@ParTable
+                # gradient.log = gradient.obj * (2 * N) / nclusters
+
+                if(lavdata@ngroups == 1L) {
+                    N <- lavdata@Lp[[1]]$nclusters[[1]]
+                    nclusters <- lavdata@Lp[[1]]$nclusters[[2]]
+                    dx <- dx * (2 * N) / nclusters
+                } else {
+                    group.values <- lav_partable_group_values(lavpartable)
+                    for(g in seq_len(lavdata@ngroups)) {
+                        N <- lavdata@Lp[[g]]$nclusters[[1]]
+                        nclusters <- lavdata@Lp[[g]]$nclusters[[2]]
+                        g.idx <-
+                          which((lavpartable$group ==
+                                 group.values[g])[lavpartable$free > 0L])
+                        dx[g.idx] <- dx[g.idx] * (2 * N) / nclusters
+                    }
+                }
+            }
+        } else {
+            # do nothing (for now)
+        }
+    }
+
+    # optim?
+    if(optim) {
+        # 1. scale (note: divide, not multiply!)
+        if(!is.null(object@optim$parscale)) {
+            dx <- dx / object@optim$parscale
+        }
+
+        # 2. pack
+        if(lavmodel@eq.constraints) {
+            dx <- as.numeric( dx %*% lavmodel@eq.constraints.K )
+        }
+        # only for PML: divide by N (to speed up convergence)
+        if(lavmodel@estimator == "PML") {
+            dx <- dx / lavsamplestats@ntotal
+        }
+    }
+
     # labels
     if(add.labels) {
-        names(OUT) <- lav_partable_labels(object@ParTable, type="free")
+        if(optim && lavmodel@eq.constraints) {
+            NAMES.all <- lav_partable_labels(object@ParTable, type="free")
+            SEQ <- seq_len( length(NAMES.all) )
+            pack.SEQ <- as.numeric( (SEQ - lavmodel@eq.constraints.k0) %*%
++                                   lavmodel@eq.constraints.K )
+            ok.idx <- which(pack.SEQ %in% SEQ)
+            NAMES <- rep("(eq.con)", length(pack.SEQ))
+            NAMES[ok.idx] <- NAMES.all[ pack.SEQ[ok.idx] ]
+            names(dx) <- NAMES
+        } else {
+            names(dx) <- lav_partable_labels(object@ParTable, type="free")
+        }
     }
 
     # class
     if(add.class) {
-        class(OUT) <- c("lavaan.vector", "numeric")
+        class(dx) <- c("lavaan.vector", "numeric")
     }
 
-    OUT
+    dx
 }
 
 lav_object_inspect_hessian <- function(object,
     add.labels = FALSE, add.class = FALSE) {
 
-    OUT <- lav_model_hessian(lavmodel       = object@Model, 
+    OUT <- lav_model_hessian(lavmodel       = object@Model,
                              lavsamplestats = object@SampleStats,
                              lavdata        = object@Data,
                              lavcache       = object@Cache,
+                             lavoptions     = object@Options,
                              group.weight   = TRUE)
 
     # labels
@@ -1917,33 +2300,34 @@ lav_object_inspect_hessian <- function(object,
     OUT
 }
 
-lav_object_inspect_information <- function(object, 
+lav_object_inspect_information <- function(object,
     information = "default", augmented = FALSE, inverted = FALSE,
     add.labels = FALSE, add.class = FALSE) {
 
-    if(information == "default") {
-        information <- object@Options$information
-    } 
+    if(information != "default") {
+        # override option
+        object@Options$information <- information
+    }
 
-    if(information == "expected" || information == "observed") {
-        OUT <- lav_model_information(lavmodel =  object@Model,
+    # backward compatibility
+    if(.hasSlot(object, "h1")) {
+        lavh1 <- object@h1
+    } else {
+        lavh1 <- lav_h1_implied_logl(lavdata = object@Data,
+                                     lavsamplestats = object@SampleStats,
+                                     lavoptions = object@Options)
+    }
+
+    OUT <- lav_model_information(lavmodel =  object@Model,
                   lavsamplestats = object@SampleStats,
                   lavdata        = object@Data,
                   lavcache       = object@Cache,
-                  information    = information,
+                  lavimplied     = object@implied,
+                  lavh1          = lavh1,
+                  lavoptions     = object@Options,
+                  extra          = FALSE,
                   augmented      = augmented,
                   inverted       = inverted)
-    } else if(information == "first.order") {
-        B0 <- lav_model_information_firstorder(lavmodel =  object@Model,
-              lavsamplestats = object@SampleStats,
-              lavdata        = object@Data,
-              lavcache       = object@Cache,
-              check.pd       = FALSE,
-              augmented      = augmented,
-              inverted       = inverted)
-        attr(B0, "B0.group") <- NULL
-        OUT <- B0
-    }
 
     # labels
     if(add.labels) {
@@ -1965,14 +2349,76 @@ lav_object_inspect_information <- function(object,
     OUT
 }
 
+lav_object_inspect_h1_information <- function(object,
+    information = "default", h1.information = "default", inverted = FALSE,
+    add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
+
+    if(information != "default") {
+        # override option
+        object@Options$information <- information
+    }
+    if(h1.information != "default") {
+        # override option
+        object@Options$h1.information <- h1.information
+    }
+
+    lavmodel <- object@Model
+    lavdata  <- object@Data
+
+    # list!
+    OUT <- lav_model_h1_information(lavmodel = lavmodel,
+                  lavsamplestats = object@SampleStats,
+                  lavdata        = lavdata,
+                  lavcache       = object@Cache,
+                  lavimplied     = object@implied,
+                  lavh1          = object@h1,
+                  lavoptions     = object@Options)
+
+    # inverted? (NOT USED)
+    #if(inverted) {
+    #    OUT <- lapply(OUT, solve) # FIXME: handle errors...
+    #}
+
+    if(add.labels) {
+        NAMES <- lav_object_inspect_delta_rownames(object,
+                     drop.list.single.group = FALSE)
+    }
+
+    # labels/class per group
+    for(g in seq_len(lavmodel@ngroups)) {
+
+        # labels
+        if(add.labels) {
+            colnames(OUT[[g]]) <- rownames(OUT[[g]]) <- NAMES[[g]]
+        }
+
+        # class
+        if(add.class) {
+            class(OUT[[g]]) <- c("lavaan.matrix.symmetric", "matrix")
+        }
+    }
+
+    # drop list?
+    if(lavmodel@ngroups == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else if(!is.null(lavdata)) {
+        if(length(lavdata@group.label) > 0L) {
+            names(OUT) <- unlist(lavdata@group.label)
+        }
+    }
+
+    OUT
+}
+
 # only to provide a direct function to the old 'getVariability()' function
-lav_object_inspect_firstorder <- function(object, 
+lav_object_inspect_firstorder <- function(object,
     add.labels = FALSE, add.class = FALSE) {
 
      B0 <- lav_model_information_firstorder(lavmodel =  object@Model,
               lavsamplestats = object@SampleStats,
               lavdata        = object@Data,
               lavcache       = object@Cache,
+              lavoptions     = object@Options,
               check.pd       = FALSE,
               augmented      = FALSE,
               inverted       = FALSE)
@@ -1997,25 +2443,47 @@ lav_object_inspect_vcov <- function(object, standardized = FALSE,
     type = "std.all", free.only = TRUE,
     add.labels = FALSE, add.class = FALSE, remove.duplicated = FALSE) {
 
+    lavmodel <- object@Model
+    lavoptions <- object@Options
+
+    # rotation?
+    if( .hasSlot(lavmodel, "nefa") && (lavmodel@nefa > 0L) &&
+        lavoptions$rotation != "none" #&& lavoptions$rotation.se == "delta"
+      ) {
+        rotation <- TRUE
+    } else {
+        rotation <- FALSE
+    }
+
     npar <- max(object@ParTable$free)
     if(object@optim$npar == 0) {
         OUT <- matrix(0,0,0)
     } else {
         # check if we already have it
-        tmp <- try(slot(object, "vcov"), silent = TRUE)
-        if(!inherits(tmp, "try-error") && !is.null(object@vcov$vcov)) {
+        #tmp <- try(slot(object, "vcov"), silent = TRUE)
+        #if( !inherits(tmp, "try-error") && !is.null(object@vcov$vcov)
+        #   && !(rotation && standardized)) {
+        if( .hasSlot(object, "vcov") && !is.null(object@vcov$vcov) ) {
             OUT <- object@vcov$vcov
         } else {
-        # compute it again
-            OUT <- lav_model_vcov(lavmodel       = object@Model,
+            # compute it again
+            #if(rotation && standardized) {
+            #    lavmodel <- lav_model_set_parameters(lavmodel,
+            #                    x = object@optim$x)
+            #    lavoptions <- object@Options
+            #    lavoptions$rotation.se <- "delta"
+            #}
+            OUT <- lav_model_vcov(lavmodel       = lavmodel,
                                   lavsamplestats = object@SampleStats,
-                                  lavoptions     = object@Options,
+                                  lavoptions     = lavoptions,
                                   lavdata        = object@Data,
-                                  lavcache       = object@Cache
+                                  lavcache       = object@Cache,
+                                  lavimplied     = object@implied,
+                                  lavh1          = object@h1
                                  )
         }
     }
-   
+
     # strip attributes
     attr(OUT, "E.inv") <- NULL
     attr(OUT, "B0") <- NULL
@@ -2028,36 +2496,44 @@ lav_object_inspect_vcov <- function(object, standardized = FALSE,
     # standardized?
     if(standardized) {
         if(type == "std.lv") {
-            JAC <- try(lav_func_jacobian_complex(func = standardize.est.lv.x,
-                x = object@optim$x, lavobject = object), silent = TRUE)
-            if(inherits(JAC, "try-error")) { # eg. pnorm()
-                JAC <- lav_func_jacobian_simple(func = standardize.est.lv.x,
-                    x = object@optim$x, lavobject = object)
-            }
+            FUN <- lav_standardize_lv_x
         } else if(type == "std.all") {
-            JAC <- try(lav_func_jacobian_complex(func = standardize.est.all.x,
-                x = object@optim$x, object = object), silent = TRUE)
-            if(inherits(JAC, "try-error")) { # eg. pnorm()
-                JAC <- lav_func_jacobian_simple(func = standardize.est.all.x,
-                    x = object@optim$x, lavobject = object)
-            }
+            FUN <- lav_standardize_all_x
         } else if(type == "std.nox") {
-            JAC <- 
-                try(lav_func_jacobian_complex(func = standardize.est.all.nox.x,
-                    x = object@optim$x, lavobject = object), silent = TRUE)
+            FUN <- lav_standardize_all_nox_x
+        }
+
+
+
+        if(rotation) {
+            JAC <- numDeriv::jacobian(func = FUN, x = object@optim$x,
+                       method = "simple",
+                       method.args = list(eps = 1e-03), # default is 1e-04
+                       lavobject = object, rotation = rotation)
+        } else {
+
+            x.vec <- lav_model_get_parameters(lavmodel)
+            JAC <- try(lav_func_jacobian_complex(func = FUN, x = x.vec,
+                           lavobject = object),
+                       silent = TRUE)
             if(inherits(JAC, "try-error")) { # eg. pnorm()
-                JAC <- 
-                    lav_func_jacobian_simple(func = standardize.est.all.nox.x,
-                        x = object@optim$x, lavobject = object)
+                JAC <- lav_func_jacobian_simple(func = FUN, x = x.vec,
+                           lavobject = object)
             }
         }
 
         # JAC contains *all* parameters in the parameter table
-        if(free.only) { 
+        if(free.only) {
             free.idx <- which(object@ParTable$free > 0L)
             JAC <- JAC[free.idx,, drop = FALSE]
         }
+
         OUT <- JAC %*% OUT %*% t(JAC)
+
+        # force OUT to be symmetric and pd
+        OUT <- (OUT + t(OUT))/2
+        #OUT <- lav_matrix_symmetric_force_pd(OUT,
+        #                                     tol = 1e-09) # was 1e-06 < 0.6-9
     }
 
     # labels
@@ -2067,8 +2543,8 @@ lav_object_inspect_vcov <- function(object, standardized = FALSE,
     }
 
     # alias?
-    if(remove.duplicated && object@Model@eq.constraints) {
-        simple.flag <- lav_constraints_check_simple(object@Model)
+    if(remove.duplicated && lavmodel@eq.constraints) {
+        simple.flag <- lav_constraints_check_simple(lavmodel)
         if(simple.flag) {
             LAB <- lav_partable_labels(object@ParTable, type="free")
             dup.flag <- duplicated(LAB)
@@ -2086,24 +2562,33 @@ lav_object_inspect_vcov <- function(object, standardized = FALSE,
     OUT
 }
 
-lav_object_inspect_vcov_def <- function(object, standardized = FALSE,
-    type = "std.all", add.labels = FALSE, add.class = FALSE) {
+lav_object_inspect_vcov_def <- function(object, joint = FALSE,
+    standardized = FALSE, type = "std.all",
+    add.labels = FALSE, add.class = FALSE) {
 
     lavmodel    <- object@Model
     lavpartable <- object@ParTable
+    free.idx <- which(lavpartable$free > 0L)
     def.idx <- which(lavpartable$op == ":=")
+    joint.idx <- c(free.idx, def.idx)
 
-    if(length(def.idx) == 0L) {
+    if(!joint && length(def.idx) == 0L) {
+        return( matrix(0,0,0) )
+    } else if(joint && length(joint.idx) == 0L) {
         return( matrix(0,0,0) )
     }
 
     if(standardized) {
         # compute VCOV for "free" parameters only
-        VCOV <- lav_object_inspect_vcov(object, 
+        VCOV <- lav_object_inspect_vcov(object,
                                         standardized = TRUE,
                                         type = type, free.only = FALSE,
                                         add.labels = FALSE, add.class = FALSE)
-        OUT <- VCOV[def.idx, def.idx, drop = FALSE]
+        if(joint) {
+            OUT <- VCOV[joint.idx, joint.idx, drop = FALSE]
+        } else {
+            OUT <- VCOV[def.idx, def.idx, drop = FALSE]
+        }
     } else {
 
         # get free parameters
@@ -2124,9 +2609,9 @@ lav_object_inspect_vcov_def <- function(object, standardized = FALSE,
             VCOV <- lav_object_inspect_vcov(object,
                                             standardized = FALSE,
                                             type = type, free.only = TRUE,
-                                            add.labels = FALSE, 
+                                            add.labels = FALSE,
                                             add.class = FALSE)
-    
+
             # regular delta method
             JAC <- try(lav_func_jacobian_complex(func = lavmodel@def.function,
                        x = x), silent=TRUE)
@@ -2134,13 +2619,22 @@ lav_object_inspect_vcov_def <- function(object, standardized = FALSE,
                 JAC <- lav_func_jacobian_simple(func = lavmodel@def.function,
                                                 x = x)
             }
-            OUT <- JAC %*% VCOV %*% t(JAC)
+            if(joint) {
+                JAC2 <- rbind( diag(nrow = ncol(JAC)), JAC )
+                OUT <- JAC2 %*% VCOV %*% t(JAC2)
+            } else {
+                OUT <- JAC %*% VCOV %*% t(JAC)
+            }
         }
     }
 
     # labels
     if(add.labels) {
-        LHS.names <- lavpartable$lhs[def.idx]
+        if(joint) {
+            LHS.names <- lavpartable$lhs[joint.idx]
+        } else {
+            LHS.names <- lavpartable$lhs[def.idx]
+        }
         colnames(OUT) <- rownames(OUT) <- LHS.names
     }
 
@@ -2156,6 +2650,7 @@ lav_object_inspect_UGamma <- function(object,
     add.labels = FALSE, add.class = FALSE) {
 
     out <- lav_test_satorra_bentler(lavobject     = object,
+                                    method        = "original",
                                     return.ugamma = TRUE)
     OUT <- out$UGamma
 
@@ -2172,14 +2667,74 @@ lav_object_inspect_UGamma <- function(object,
     OUT
 }
 
+lav_object_inspect_UfromUGamma <- function(object,
+    add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
+
+    out <- lav_test_satorra_bentler(lavobject     = object,
+                                    method        = "original",
+                                    return.u      = TRUE)
+    OUT <- out$UfromUGamma
+
+    # labels
+    #if(add.labels) {
+       # colnames(OUT) <- rownames(OUT) <-
+    #}
+
+    lavmodel <- object@Model
+    lavdata  <- object@Data
+
+    if(lavmodel@ngroups == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+        # class
+        if(add.class) {
+            class(OUT) <- c("lavaan.matrix.symmetric", "matrix")
+        }
+    } else {
+        if(length(lavdata@group.label) > 0L) {
+            names(OUT) <- unlist(lavdata@group.label)
+        }
+        if(add.class) {
+            for(g in seq_len(lavmodel@ngroups)) {
+                class(OUT[[g]]) <- c("lavaan.matrix.symmetric", "matrix")
+            }
+        }
+    }
+
+    OUT
+}
+
+
 # Delta (jacobian: d samplestats / d free_parameters)
 lav_object_inspect_delta <- function(object,
     add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
-    OUT <- computeDelta(object@Model)
+    lavmodel    <- object@Model
+    lavdata     <- object@Data
+    lavpartable <- object@ParTable
+    lavpta      <- object@pta
 
-    # labels
-    lavmodel <- object@Model
+    OUT <- lav_object_inspect_delta_internal(lavmodel = lavmodel,
+        lavdata = lavdata, lavpartable = lavpartable, lavpta = lavpta,
+        add.labels = add.labels, add.class = add.class,
+        drop.list.single.group = drop.list.single.group)
+
+    OUT
+}
+
+lav_object_inspect_delta_rownames <- function(object,
+                                              lavmodel = NULL,
+                                              lavpartable = NULL,
+                                              lavpta = NULL,
+                                              drop.list.single.group = FALSE) {
+    if(!is.null(object)) {
+        lavmodel    <- object@Model
+        lavpartable <- object@ParTable
+        lavpta      <- object@pta
+        lavdata     <- object@Data
+    } else {
+        lavdata     <- NULL
+    }
+
     categorical    <- lavmodel@categorical
     conditional.x  <- lavmodel@conditional.x
     group.w.free   <- lavmodel@group.w.free
@@ -2189,84 +2744,148 @@ lav_object_inspect_delta <- function(object,
     nexo           <- lavmodel@nexo
     nblocks        <- lavmodel@nblocks
 
-    if(add.labels) {
-        PNAMES <- lav_partable_labels(object@ParTable, type="free")
+    if(is.null(lavpta)) {
+        lavpta <- lav_partable_attributes(lavpartable)
+    }
 
-        for(g in 1:nblocks) {
-            colnames(OUT[[g]]) <- PNAMES
+    # store names per block, rbind later
+    NAMES <- vector("list", length = nblocks)
 
-            if(conditional.x) {
-                ov.names <- object@pta$vnames$ov.nox[[g]]
-            } else {
-                ov.names <- object@pta$vnames$ov[[g]]
-            }
-            ov.names.x <- object@pta$vnames$ov.x[[g]]
+    # output is per group
+    OUT <- vector("list", lavmodel@ngroups)
+
+    for(g in 1:nblocks) {
+
+        if(conditional.x) {
+            ov.names <- lavpta$vnames$ov.nox[[g]]
+        } else {
+            ov.names <- lavpta$vnames$ov[[g]]
+        }
+        ov.names.x <- lavpta$vnames$ov.x[[g]]
             nvar <- length(ov.names)
 
 
-            names.cov <- names.cor <- names.var <- character(0L)
-            names.mu <- names.pi <- names.th <- character(0L)
-            names.gw <- character(0L)
- 
-            # Sigma
-            # - if continuous: vech(Sigma)
-            # - if categorical: first numeric variances, then
-            tmp <- apply(expand.grid(ov.names, ov.names), 1L, 
-                         paste, collapse = "~~")
-            if(categorical) {
-                names.cor <- tmp[lav_matrix_vech_idx(nvar, diagonal = FALSE)]
-                names.var <- tmp[lav_matrix_diag_idx(nvar)[num.idx[[g]]]]
-            } else {
-                names.cov <- tmp[lav_matrix_vech_idx(nvar, diagonal = TRUE)]
+        names.cov <- names.cor <- names.var <- character(0L)
+        names.mu <- names.pi <- names.th <- character(0L)
+        names.gw <- character(0L)
+
+        # Sigma
+        # - if continuous: vech(Sigma)
+        # - if categorical: first numeric variances, then
+        #tmp <- apply(expand.grid(ov.names, ov.names), 1L,
+        #             paste, collapse = "~~")
+
+        #if(categorical) {
+        #    names.cor <- tmp[lav_matrix_vech_idx(nvar, diagonal = FALSE)]
+        #    names.var <- tmp[lav_matrix_diag_idx(nvar)[num.idx[[g]]]]
+        #} else {
+        #    names.cov <- tmp[lav_matrix_vech_idx(nvar, diagonal = TRUE)]
+        #}
+
+        # NOTE: in 0.6-1, we use the same order, but 'label' in row-wise
+        # format (eg x1 ~~ x2 instead of x2 ~~ x1)
+        tmp <- matrix(apply(expand.grid(ov.names, ov.names), 1L,
+                      paste, collapse = "~~"), nrow = nvar)
+        if(categorical) {
+            names.cor <- lav_matrix_vechru(tmp, diagonal = FALSE)
+            names.var <- diag(tmp)[num.idx[[g]]]
+        } else {
+            names.cov <- lav_matrix_vechru(tmp, diagonal = TRUE)
+        }
+
+
+        # Mu
+        if(!categorical && lavmodel@meanstructure) {
+            names.mu <- paste(ov.names, "~1", sep = "")
+        }
+
+        # Pi
+        if(conditional.x && lavmodel@nexo[g] > 0L) {
+           names.pi <- apply(expand.grid(ov.names, ov.names.x), 1L,
+                             paste, collapse = "~")
+        }
+
+        # th
+        if(categorical) {
+            names.th <- lavpta$vnames$th[[g]]
+            # interweave numeric intercepts, if any
+            if(length(num.idx[[g]]) > 0L) {
+                tmp <- character( length(th.idx[[g]]) )
+                tmp[ th.idx[[g]] > 0 ] <- names.th
+                tmp[ th.idx[[g]] == 0 ] <- paste(ov.names[ num.idx[[g]] ],
+                                                 "~1", sep = "")
+                names.th <- tmp
             }
+        }
 
-            # Mu
-            if(!categorical && lavmodel@meanstructure) {
-                names.mu <- paste(ov.names, "~1", sep = "")
-            }
+        # gw
+        if(group.w.free) {
+            names.gw <- "w"
+        }
 
-            # Pi
-            if(conditional.x && lavmodel@nexo[g] > 0L) {
-               names.pi <- apply(expand.grid(ov.names, ov.names.x), 1L, 
-                                 paste, collapse = "~")
-            }
+        NAMES[[g]] <- c(names.gw,
+                        names.th, names.mu,
+                        names.pi,
+                        names.cov, names.var, names.cor)
 
-            # th
-            if(categorical) {
-                names.th <- object@pta$vnames$th[[g]]
-                # interweave numeric intercepts, if any
-                if(length(num.idx[[g]]) > 0L) {
-                    tmp <- character( length(th.idx[[g]]) )
-                    tmp[ th.idx[[g]] > 0 ] <- names.th
-                    tmp[ th.idx[[g]] == 0 ] <- paste(ov.names[ num.idx[[g]] ],
-                                                     "~1", sep = "")
-                    names.th <- tmp
-                }
-            }
+    } # blocks
 
-            # gw
-            if(group.w.free) {
-                names.gw <- "w"
-            }
+    # multilevel?
+    if(lavmodel@multilevel) {
+        for(g in 1:lavmodel@ngroups) {
+                OUT[[g]] <- c(NAMES[[(g-1)*2 + 1]],
+                              NAMES[[(g-1)*2 + 2]] )
+        }
+    } else {
+        OUT <- NAMES
+    }
 
-            rownames(OUT[[g]]) <- c(names.gw,
-                                    names.th, names.mu, 
-                                    names.pi, 
-                                    names.cov, names.var, names.cor)
+    # drop list?
+    if(lavmodel@ngroups == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else if(!is.null(lavdata)) {
+        if(length(lavdata@group.label) > 0L) {
+            names(OUT) <- unlist(lavdata@group.label)
+        }
+    }
 
-            # class
-            if(add.class) {
-                class(OUT[[g]]) <- c("lavaan.matrix", "matrix")
-            }
+    OUT
+}
 
-        } # g
-    } # labels
+lav_object_inspect_delta_internal <- function(lavmodel = NULL, lavdata  = NULL,
+    lavpartable = NULL, lavpta = NULL,
+    add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
 
-    if(nblocks == 1L && drop.list.single.group) {
+    OUT <- computeDelta(lavmodel)
+
+    if(add.labels) {
+        PNAMES <- lav_partable_labels(lavpartable, type="free")
+        ROWNAMES  <- lav_object_inspect_delta_rownames(object = NULL,
+                         lavmodel = lavmodel, lavpartable = lavpartable,
+                         lavpta = lavpta, drop.list.single.group = FALSE)
+    }
+
+    for(g in seq_len(lavmodel@ngroups)) {
+
+        # add labels
+        if(add.labels) {
+            colnames(OUT[[g]]) <- PNAMES
+            rownames(OUT[[g]]) <- ROWNAMES[[g]]
+        }
+
+        # add class
+        if(add.class) {
+            class(OUT[[g]]) <- c("lavaan.matrix", "matrix")
+        }
+
+    } # ngroups
+
+    # drop list?
+    if(lavmodel@ngroups == 1L && drop.list.single.group) {
         OUT <- OUT[[1]]
     } else {
-        if(length(object@Data@group.label) > 0L) {
-            names(OUT) <- unlist(object@Data@group.label)
+        if(length(lavdata@group.label) > 0L) {
+            names(OUT) <- unlist(lavdata@group.label)
         }
     }
 
@@ -2291,8 +2910,8 @@ lav_object_inspect_zero_cell_tables <- function(object,
 
     # select tables with empty cells
     empty.id <- TABLE$id[which(TABLE$obs.freq == 0)]
-   
-    
+
+
     if(length(empty.id) == 0L) {
         # only when lavInspect() is used, give message
         if(add.class) {
@@ -2308,7 +2927,7 @@ lav_object_inspect_zero_cell_tables <- function(object,
     OUT
 }
 
-lav_object_inspect_coef <- function(object, type = "free", 
+lav_object_inspect_coef <- function(object, type = "free",
                                     add.labels = FALSE, add.class = FALSE) {
 
     if(type == "user" || type == "all") {
@@ -2338,7 +2957,7 @@ lav_object_inspect_coef <- function(object, type = "free",
 lav_object_inspect_npar <- function(object, type = "free") {
 
     if(type == "free") {
-        npar <- sum(object@ParTable$free > 0L & 
+        npar <- sum(object@ParTable$free > 0L &
                     !duplicated(object@ParTable$free))
     } else {
         npar <- length(object@ParTable$lhs)
@@ -2347,34 +2966,211 @@ lav_object_inspect_npar <- function(object, type = "free") {
     npar
 }
 
-lav_object_inspect_icc <- function(object, add.labels = FALSE, 
-                                   add.class = FALSE) {
+lav_object_inspect_icc <- function(object, add.labels = FALSE,
+                                   add.class = FALSE,
+                                   drop.list.single.group = FALSE) {
 
     lavdata <- object@Data
+    G <- lavdata@ngroups
+    OUT <- vector("list", G)
 
     # multilevel?
     if(lavdata@nlevels == 1L) {
         stop("lavaan ERROR: intraclass correlation only available for clustered data")
     }
 
-    # do we have h1 slot?
-    if(length(object@h1) > 0L) {
-        implied <- object@h1$implied
-
-        W <- implied$cov[[1]]
-        B <- implied$cov[[2]]
-
-        # FIXME: enlarge matrices so they have the same size
-        ICC <- diag(B)/(diag(W) + diag(B))
+    if(length(object@h1) == 0L) {
+        stop("lavaan ERROR: h1 slot is of available; refit with h1 = TRUE")
     }
 
-    if(add.labels) {
-        names(ICC) <- lavdata@ov.names[[1]]
+    # implied statistics
+    implied <- object@h1$implied
+
+    for(g in 1:G) {
+        Sigma.W <- implied$cov[[  (g-1)*lavdata@nlevels + 1 ]]
+        Sigma.B <- implied$cov[[  (g-1)*lavdata@nlevels + 2 ]]
+
+        W.diag <- diag(Sigma.W)
+        B.diag <- diag(Sigma.B)
+
+        OUT[[g]] <- numeric(length(W.diag))
+
+        ov.names.l <- lavdata@ov.names.l[[g]]
+        w.idx <- which(ov.names.l[[1]] %in% ov.names.l[[2]])
+        w.names <- ov.names.l[[1]][w.idx]
+        b.idx <- match(w.names, ov.names.l[[2]])
+
+        OUT[[g]][w.idx] <- B.diag[b.idx]/(W.diag[w.idx] + B.diag[b.idx])
+
+        # label
+        if(add.labels) {
+            names(OUT[[g]]) <- ov.names.l[[1]]
+        }
+
+        # class
+        if(add.class) {
+            class(OUT[[g]]) <- c("lavaan.vector", "numeric")
+        }
+    } # g
+
+    if(G == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else {
+        if(length(object@Data@group.label) > 0L) {
+            names(OUT) <- unlist(object@Data@group.label)
+        }
     }
 
-    if(add.class) {
-        class(ICC) <- c("lavaan.vector", "numeric")
-    }
-
-    ICC
+    OUT
 }
+
+lav_object_inspect_ranef <- function(object, add.labels = FALSE,
+                                     add.class = FALSE,
+                                     drop.list.single.group = FALSE) {
+
+    lavdata <- object@Data
+    lavsamplestats <- object@SampleStats
+
+    G <- lavdata@ngroups
+    OUT <- vector("list", G)
+
+    # multilevel?
+    if(lavdata@nlevels == 1L) {
+        stop("lavaan ERROR: random effects only available for clustered data (in the long format)")
+    }
+
+    # implied statistics
+    lavimplied <- object@implied
+
+    for(g in 1:G) {
+
+        Lp <- lavdata@Lp[[g]]
+        YLp <- lavsamplestats@YLp[[g]]
+
+        # implied for this group
+        group.idx <- (g - 1)*lavdata@nlevels + seq_len(lavdata@nlevels)
+        implied.group <- lapply(lavimplied, function(x) x[group.idx])
+
+        # random effects (=random intercepts or cluster means)
+        out <- lav_mvnorm_cluster_implied22l(Lp = Lp, implied = implied.group)
+        MB.j <- lav_mvnorm_cluster_em_estep_ranef(YLp = YLp, Lp = Lp,
+                        sigma.w = out$sigma.w, sigma.b = out$sigma.b,
+                        sigma.zz = out$sigma.zz, sigma.yz = out$sigma.yz,
+                        mu.z = out$mu.z, mu.w = out$mu.w, mu.b = out$mu.b,
+                        se = FALSE)
+        OUT[[g]] <- MB.j
+
+        ov.names.l <- lavdata@ov.names.l[[g]]
+
+        # label
+        if(add.labels) {
+            colnames(OUT[[g]]) <- ov.names.l[[1]]
+        }
+
+        # class
+        if(add.class) {
+            class(OUT[[g]]) <- c("lavaan.matrix", "matrix")
+
+        }
+    } # g
+
+    if(G == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else {
+        if(length(object@Data@group.label) > 0L) {
+            names(OUT) <- unlist(object@Data@group.label)
+        }
+    }
+
+    OUT
+}
+
+# casewise loglikelihood contributions
+lav_object_inspect_loglik_casewise <- function(object, log. = TRUE,
+    add.labels = FALSE, add.class = FALSE, drop.list.single.group = FALSE) {
+
+    lavdata <- object@Data
+    lavsamplestats <- object@SampleStats
+    lavimplied <- object@implied
+    lavoptions <- object@Options
+
+    G <- lavdata@ngroups
+    OUT <- vector("list", G)
+
+    # multilevel?
+    if(lavdata@nlevels > 1L) {
+        stop("lavaan ERROR: casewise (log)likeloods contributions not yet available for clustered data")
+    }
+
+    # estimator ML?
+    if(object@Options$estimator != "ML") {
+        stop("lavaan ERROR: casewise (log)likeloods contributions only available for estimator = ", dQuote("ML"))
+    }
+
+    for(g in 1:G) {
+
+        if(lavsamplestats@missing.flag) {
+            OUT[[g]] <-
+                lav_mvnorm_missing_llik_casewise(Y = lavdata@X[[g]],
+                                        wt = lavdata@weights[[g]],
+                                        Mu = lavimplied$mean[[g]],
+                                        Sigma = lavimplied$cov[[g]],
+                                        x.idx  = lavsamplestats@x.idx[[g]])
+        } else { # single-level, complete data
+            if(lavoptions$conditional.x) {
+                if(!is.null(lavdata@weights[[g]])) {
+                    stop("lavaan ERROR: no support (yet) if weights are used.")
+                }
+                OUT[[g]] <- lav_mvreg_loglik_data(
+                                      Y          = lavdata@X[[g]],
+                                      eXo        = lavdata@eXo[[g]],
+                                      res.int    = lavimplied$res.int[[g]],
+                                      res.slopes = lavimplied$res.slopes[[g]],
+                                      res.cov    = lavimplied$res.cov[[g]],
+                                      casewise   = TRUE)
+
+            } else {
+
+                if(object@Model@meanstructure) {
+                    MEAN <- lavimplied$mean[[g]]
+                } else {
+                    MEAN <- lavsamplestats@mean[[g]]
+                }
+                OUT[[g]] <-
+                    lav_mvnorm_loglik_data(Y  = lavdata@X[[g]],
+                                           wt = lavdata@weights[[g]],
+                                           Mu = MEAN,
+                                           Sigma = lavimplied$cov[[g]],
+                                           x.idx = lavsamplestats@x.idx[[g]],
+                                           casewise = TRUE)
+            }
+        } # single-level, complete data
+
+        # log. = FALSE?
+        if(!log.) {
+            OUT[[g]] <- exp(OUT[[g]])
+        }
+
+        # label
+        # if(add.labels) {
+        # }
+
+        # class
+        if(add.class) {
+            class(OUT[[g]]) <- c("lavaan.vector", "numeric")
+
+        }
+
+    } # g
+
+    if(G == 1L && drop.list.single.group) {
+        OUT <- OUT[[1]]
+    } else {
+        if(length(object@Data@group.label) > 0L) {
+            names(OUT) <- unlist(object@Data@group.label)
+        }
+    }
+
+    OUT
+}
+

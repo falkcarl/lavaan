@@ -1,4 +1,5 @@
 # compute model implied statistics
+# per block
 lav_model_implied <- function(lavmodel = NULL, GLIST = NULL) {
 
     stopifnot(inherits(lavmodel, "lavModel"))
@@ -7,10 +8,14 @@ lav_model_implied <- function(lavmodel = NULL, GLIST = NULL) {
     if(is.null(GLIST)) GLIST <- lavmodel@GLIST
 
     # model-implied variance/covariance matrix ('sigma hat')
-    Sigma.hat <- computeSigmaHat(lavmodel = lavmodel, GLIST = GLIST)
+    Sigma.hat <- computeSigmaHat(lavmodel = lavmodel, GLIST = GLIST, delta = (lavmodel@parameterization == "delta"))
 
     # model-implied mean structure ('mu hat')
-    Mu.hat <-    computeMuHat(lavmodel = lavmodel,  GLIST = GLIST)
+    if(lavmodel@meanstructure) {
+        Mu.hat <- computeMuHat(lavmodel = lavmodel,  GLIST = GLIST)
+    } else {
+        Mu.hat <- vector("list", length = lavmodel@nblocks)
+    }
 
     # if conditional.x, slopes
     if(lavmodel@conditional.x) {
@@ -25,7 +30,7 @@ lav_model_implied <- function(lavmodel = NULL, GLIST = NULL) {
     } else {
         TH <- vector("list", length = lavmodel@nblocks)
     }
- 
+
     if(lavmodel@group.w.free) {
         w.idx <- which(names(lavmodel@GLIST) == "gw")
         GW <- unname(GLIST[ w.idx ])
@@ -39,7 +44,7 @@ lav_model_implied <- function(lavmodel = NULL, GLIST = NULL) {
     if(lavmodel@conditional.x) {
         implied <- list(res.cov = Sigma.hat, res.int = Mu.hat, res.slopes = SLOPES, res.th = TH, group.w = GW)
     } else {
-        implied <- list(cov = Sigma.hat, mean = Mu.hat, slopes = SLOPES, th = TH, group.w = GW)
+        implied <- list(cov = Sigma.hat, mean = Mu.hat, th = TH, group.w = GW)
     }
 
     implied

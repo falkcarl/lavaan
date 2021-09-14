@@ -1,4 +1,5 @@
-# compute the loglikelihood of the data, given the model
+# compute the loglikelihood of the data, given the current values of the
+# model parameters
 lav_model_loglik <- function(lavdata        = NULL,
                              lavsamplestats = NULL,
                              lavimplied     = NULL,
@@ -14,27 +15,23 @@ lav_model_loglik <- function(lavdata        = NULL,
     if(lavoptions$estimator %in% c("ML", "MML")) {
         # check if everything is numeric, OR if we have exogenous
         # factor with 2 levels only
-        if(all(lavdata@ov$type == "numeric")) {
-            logl.ok <- TRUE
-        } else {
-            not.idx <- which(lavdata@ov$type != "numeric")
-            for(i in not.idx) {
-                if(lavdata@ov$type[i] == "factor" &&
-                   lavdata@ov$exo[i] == 1L &&
-                   lavdata@ov$nlev[i] == 2L) {
-                    logl.ok <- TRUE
-                } else {
+        #if(all(lavdata@ov$type == "numeric")) {
+        logl.ok <- TRUE
+        #} else {
+        if(lavoptions$fixed.x == FALSE) {
+            exo.idx <- which(lavdata@ov$exo == 1L)
+            for(i in exo.idx) {
+                if(lavdata@ov$nlev[i] > 1L) {
                     logl.ok <- FALSE
-                    break
                 }
             }
         }
         # nlevels + fiml
-        if(lavdata@nlevels > 1L && lavsamplestats@missing.flag) {
-            logl.ok <- FALSE
-        }
+        #if(lavdata@nlevels > 1L && lavsamplestats@missing.flag) {
+        #    logl.ok <- FALSE
+        #}
     }
-  
+
     # lavsamplestats filled in? (not if no data...)
     if(length(lavsamplestats@ntotal) == 0L) {
         logl.ok <- FALSE
@@ -44,45 +41,71 @@ lav_model_loglik <- function(lavdata        = NULL,
         for(g in seq_len(ngroups) ) {
             if(lavdata@nlevels > 1L) {
                 # here, we assume only 2 levels, at [[1]] and [[2]]
-                stopifnot(lavdata@ngroups == 1L)
-                Sigma.W <- lavimplied$cov[[1]]
-                Mu.W    <- lavimplied$mean[[1]]
-                Sigma.B <- lavimplied$cov[[2]]
-                Mu.B    <- lavimplied$mean[[2]]
+                Sigma.W <- lavimplied$cov[[  (g-1)*2 + 1]]
+                Mu.W    <- lavimplied$mean[[ (g-1)*2 + 1]]
+                Sigma.B <- lavimplied$cov[[  (g-1)*2 + 2]]
+                Mu.B    <- lavimplied$mean[[ (g-1)*2 + 2]]
 
-                logl.group[g] <- lav_mvnorm_cluster_loglik_samplestats_2l(
-                    YLp          = lavsamplestats@YLp[[g]],
-                    Lp           = lavdata@Lp[[g]],
-                    Mu.W         = Mu.W,
-                    Sigma.W      = Sigma.W,
-                    Mu.B         = Mu.B,
-                    Sigma.B      = Sigma.B,
-                    Sinv.method  = "eigen",
-                    log2pi       = TRUE,
-                    minus.two    = FALSE)
+                # DEBUG ONLY
+                if(lavmodel@conditional.x) {
+                    logl.group[g] <- -1000
+                }
+
+                if(lavsamplestats@missing.flag) {
+                    logl.group[g] <-
+                        lav_mvnorm_cluster_missing_loglik_samplestats_2l(
+                            Y1 = lavdata@X[[g]],
+                            Y2 = lavsamplestats@YLp[[g]][[2]]$Y2,
+                            Lp = lavdata@Lp[[g]],
+                            Mp = lavdata@Mp[[g]],
+                            Mu.W = Mu.W, Sigma.W = Sigma.W,
+                            Mu.B = Mu.B, Sigma.B = Sigma.B,
+                            loglik.x = lavsamplestats@YLp[[g]][[2]]$loglik.x,
+                            log2pi = TRUE, minus.two = FALSE)
+                } else {
+                    logl.group[g] <- lav_mvnorm_cluster_loglik_samplestats_2l(
+                        YLp          = lavsamplestats@YLp[[g]],
+                        Lp           = lavdata@Lp[[g]],
+                        Mu.W         = Mu.W,
+                        Sigma.W      = Sigma.W,
+                        Mu.B         = Mu.B,
+                        Sigma.B      = Sigma.B,
+                        Sinv.method  = "eigen",
+                        log2pi       = TRUE,
+                        minus.two    = FALSE)
+                }
 
             } else if(lavsamplestats@missing.flag) {
-                logl.group[g] <-
-                    lav_mvnorm_missing_loglik_samplestats(
-                        Yp    = lavsamplestats@missing[[g]],
-                        Mu    = lavimplied$mean[[g]],
-                        Sigma = lavimplied$cov[[g]])
+                x.idx <- lavsamplestats@x.idx[[g]]
+                X.MEAN <- X.COV <- NULL
+                if(length(x.idx) > 0L) {
+                    X.MEAN <- lavsamplestats@missing.h1[[g]]$mu[x.idx]
+                    X.COV  <- lavsamplestats@missing.h1[[g]]$sigma[x.idx,
+                                 x.idx, drop = FALSE]
+                }
+                logl.group[g] <- lav_mvnorm_missing_loglik_samplestats(
+                        Yp     = lavsamplestats@missing[[g]],
+                        Mu     = lavimplied$mean[[g]],
+                        Sigma  = lavimplied$cov[[g]],
+                        x.idx  = lavsamplestats@x.idx[[g]],
+                        x.mean = X.MEAN, # not needed? should be part of Sigma
+                        x.cov  = X.COV)  # not needed at all!
+                        #x.mean = lavsamplestats@mean.x[[g]],
+                        #x.cov  = lavsamplestats@cov.x[[g]])
+
             } else { # single-level, complete data
                 if(lavoptions$conditional.x) {
-                    sample.beta <- t( cbind(lavsamplestats@res.int[[g]],
-                                            lavsamplestats@res.slopes[[g]]) )
-                    sample.XX   <- crossprod(cbind(1,lavdata@eXo[[g]]))
-                    Beta        <- t( cbind(lavimplied$res.int[[g]],
-                                            lavimplied$res.slopes[[g]]) )
                     logl.group[g] <- lav_mvreg_loglik_samplestats(
-                        sample.res.beta = sample.beta,
-                        sample.res.cov  = lavsamplestats@res.cov[[g]],
-                        sample.XX       = sample.XX,
-                        sample.nobs     = lavsamplestats@nobs[[g]],
-                        Beta            = Beta,
-                        Sigma           = lavimplied$res.cov[[g]],
-                        Sinv.method     = "eigen",
-                        Sigma.inv       = NULL)
+                        sample.res.int    = lavsamplestats@res.int[[g]],
+                        sample.res.slopes = lavsamplestats@res.slopes[[g]],
+                        sample.res.cov    = lavsamplestats@res.cov[[g]],
+                        sample.mean.x     = lavsamplestats@mean.x[[g]],
+                        sample.cov.x      = lavsamplestats@cov.x[[g]],
+                        sample.nobs       = lavsamplestats@nobs[[g]],
+                        res.int           = lavimplied$res.int[[g]],
+                        res.slopes        = lavimplied$res.slopes[[g]],
+                        res.cov           = lavimplied$res.cov[[g]],
+                        Sinv.method       = "eigen")
                 } else {
                     if(lavoptions$meanstructure) {
                         Mu <- lavimplied$mean[[g]]
@@ -95,6 +118,9 @@ lav_model_loglik <- function(lavdata        = NULL,
                         sample.nobs = lavsamplestats@nobs[[g]],
                         Mu          = Mu,
                         Sigma       = lavimplied$cov[[g]],
+                        x.idx       = lavsamplestats@x.idx[[g]],
+                        x.mean      = lavsamplestats@mean.x[[g]],
+                        x.cov       = lavsamplestats@cov.x[[g]],
                         Sinv.method = "eigen",
                         Sigma.inv   = NULL)
                 }
@@ -127,7 +153,7 @@ lav_model_loglik <- function(lavdata        = NULL,
 
         # BIC2
         N.star <- (lavsamplestats@ntotal + 2) / 24
-        BIC2 <- (-2 * logl) + (npar * log(N.star))   
+        BIC2 <- (-2 * logl) + (npar * log(N.star))
     } else {
         AIC <- BIC <- BIC2 <- as.numeric(NA)
     }
@@ -142,5 +168,6 @@ lav_model_loglik <- function(lavdata        = NULL,
                 estimator     = lavoptions$estimator,
                 conditional.x = lavoptions$conditional.x,
                 fixed.x       = lavoptions$fixed.x)
+
     out
 }

@@ -19,7 +19,7 @@ ctr_pml_plrt <- function(lavobject = NULL, lavmodel = NULL, lavdata = NULL,
 
 
     if(is.null(x)) {
-        # compute 'fx' = objective function value 
+        # compute 'fx' = objective function value
         # (NOTE: since 0.5-18, NOT divided by N!!)
         fx <- lav_model_objective(lavmodel       = lavmodel,
                                   lavsamplestats = lavsamplestats,
@@ -44,6 +44,8 @@ ctr_pml_plrt <- function(lavobject = NULL, lavmodel = NULL, lavdata = NULL,
     Options$verbose <- FALSE
     Options$se <- "none"
     Options$test <- "none"
+    Options$baseline <- FALSE
+    Options$h1 <- FALSE
     fittedSat <- lavaan(ModelSat, slotOptions = Options,
                         slotSampleStats = lavsamplestats,
                         slotData = lavdata, slotCache = lavcache)
@@ -56,28 +58,32 @@ ctr_pml_plrt <- function(lavobject = NULL, lavmodel = NULL, lavdata = NULL,
 
     # we also need a `saturated model', but where the moments are based
     # on the model-implied sample statistics under H0
-    ModelSat2 <- 
+    ModelSat2 <-
         lav_partable_unrestricted(lavobject      = NULL,
                                   lavdata        = lavdata,
                                   lavoptions     = lavoptions,
                                   lavpta         = lavpta,
                                   lavsamplestats = NULL,
                                   sample.cov     = computeSigmaHat(lavmodel),
-                                  sample.mean    = computeMuHat(lavmodel), 
+                                  sample.mean    = computeMuHat(lavmodel),
                                   sample.th      = computeTH(lavmodel),
                                   sample.th.idx  = lavsamplestats@th.idx)
 
     Options2 <- Options
     Options2$optim.method <- "none"
     Options2$optim.force.converged <- TRUE
-    fittedSat2 <- lavaan(ModelSat2, 
+    Options2$check.start <- FALSE
+    Options2$check.gradient <- FALSE
+    Options2$check.post <- FALSE
+    Options2$check.vcov <- FALSE
+    fittedSat2 <- lavaan(ModelSat2,
                          slotOptions = Options2,
                          slotSampleStats = lavsamplestats,
                          slotData = lavdata, slotCache = lavcache)
 
     # the code below was contributed by Myrsini Katsikatsou (Jan 2015)
 
-# for now, only a single group is supported:    
+# for now, only a single group is supported:
 # g = 1L
 
 
@@ -85,7 +91,7 @@ ctr_pml_plrt <- function(lavobject = NULL, lavmodel = NULL, lavdata = NULL,
 
 # First define the number of non-redundant elements of the (fitted)
 # covariance/correlation matrix of the underlying variables.
-#nvar <- lavmodel@nvar[[g]] 
+#nvar <- lavmodel@nvar[[g]]
 #dSat <- nvar*(nvar-1)/2
 #if(length(lavmodel@num.idx[[g]]) > 0L) {
 #    dSat <- dSat + length(lavmodel@num.idx[[g]])
@@ -159,8 +165,13 @@ if(lavmodel@eq.constraints) {
         }
     }
 } else {
-    Inv_of_InvH_to_psipsi_attheta0 <- 
-        solve(InvH_to_psipsi_attheta0) #[H^psipsi(theta0)]^(-1)
+    # YR 26 June 2018: check for empty index.par (eg independence model)
+    if(length(index.par) > 0L) {
+        Inv_of_InvH_to_psipsi_attheta0 <-
+            solve(InvH_to_psipsi_attheta0) #[H^psipsi(theta0)]^(-1)
+    } else {
+        Inv_of_InvH_to_psipsi_attheta0 <- matrix(0, 0, 0)
+    }
 }
 
 H0tmp_prod1 <- Inv_of_InvH_to_psipsi_attheta0 %*% InvG_to_psipsi_attheta0
@@ -173,7 +184,7 @@ var_tww <- 2* sum(diag(H0tmp_prod2)) #variance of the first quadratic quantity
 # using the estimates of SEM parameters derived under the fitted model
 # which is the model of the null hypothesis. We also need to compute the
 # vcov matrix of these estimates (estimates of polychoric correlations)
-# as well as the related hessian and variability matrix. 
+# as well as the related hessian and variability matrix.
 tmp.options <- fittedSat2@Options
 tmp.options$se <- lavoptions$se
 VCOV.Sat2 <- lav_model_vcov(lavmodel       = fittedSat2@Model,
@@ -202,8 +213,10 @@ var_tzz <- 2* sum(diag(H1tmp_prod2))#variance of the second quadratic quantity
 ##### Section 3: Compute the asymptotic covariance of the two quadratic quantities
 
 drhodpsi_MAT <- vector("list", length = lavsamplestats@ngroups)
+group.values <- lav_partable_group_values(fittedSat2@ParTable)
 for(g in 1:lavsamplestats@ngroups) {
-    delta.g <- computeDelta(lavmodel)[[g]] # [[1]] to be substituted by g?
+
+    #delta.g <- computeDelta(lavmodel)[[g]] # [[1]] to be substituted by g?
     # The above gives the derivatives of thresholds and polychoric correlations
     # with respect to SEM param (including thresholds) evaluated under H0.
     # From deltamat we need to exclude the rows and columns referring to thresholds.
@@ -215,26 +228,53 @@ for(g in 1:lavsamplestats@ngroups) {
 
     PT <- fittedSat2@ParTable
     PT$label <- lav_partable_labels(PT)
-    free.idx <- which(PT$free > 0 & PT$op != "|" & PT$group == g)
+    free.idx <- which(PT$free > 0 & PT$op != "|" & PT$group == group.values[g])
     PARLABEL <- PT$label[free.idx]
 
     # for now, we can assume that computeDelta will always return
     # the thresholds first, then the correlations
     #
-    # later, we should add a (working) add.labels = TRUE option to 
+    # later, we should add a (working) add.labels = TRUE option to
     # computeDelta
     #th.names <- lavobject@pta$vnames$th[[g]]
     #ov.names <- lavobject@pta$vnames$ov[[g]]
-    th.names <- lavNames(lavpartable, "th")
-    ov.names <- lavNames(lavpartable, "ov.nox")
-    tmp <- utils::combn(ov.names, 2)
-    cor.names <- paste(tmp[1,], "~~", tmp[2,], sep = "")
-    NAMES <- c(th.names, cor.names)
+    #th.names <- lavNames(lavpartable, "th")
+    #ov.names <- lavNames(lavpartable, "ov.nox")
+    #ov.names.x <- lavNames(lavpartable, "ov.x")
+    #tmp <- utils::combn(ov.names, 2)
+    #cor.names <- paste(tmp[1,], "~~", tmp[2,], sep = "")
+
+    # added by YR - 22 Okt 2017 #####################################
+    #ov.names.x <- lavNames(lavpartable, "ov.x")
+    #if(length(ov.names.x)) {
+    #    slope.names <- apply(expand.grid(ov.names, ov.names.x), 1L,
+    #                             paste, collapse = "~")
+    #} else {
+    #    slope.names <- character(0L)
+    #}
+    #################################################################
+
+    #NAMES <- c(th.names, slope.names, cor.names)
+
+    # added by YR - 26 April 2018, for 0.6-1
+    # we now can get 'labelled' delta rownames
+    delta.g <- lav_object_inspect_delta_internal(lavmodel = lavmodel,
+                   lavdata = lavdata, lavpartable = lavpartable,
+                   lavpta = lavpta, add.labels = TRUE, add.class = FALSE,
+                   drop.list.single.group = FALSE)[[g]]
+    NAMES <- rownames(delta.g)
     if(g > 1L) {
         NAMES <- paste(NAMES, ".g", g, sep = "")
     }
 
     par.idx <- match(PARLABEL, NAMES)
+    if(any(is.na(par.idx))) {
+        warning("lavaan WARNING: [ctr_pml_plrt] mismatch between DELTA labels and PAR labels!\n", "PARLABEL:\n", paste(PARLABEL, collapse = " "),
+       "\nDELTA LABELS:\n", paste(NAMES, collapse = " "))
+    }
+
+
+
     drhodpsi_MAT[[g]] <- delta.g[par.idx, index.par, drop = FALSE]
 }
 drhodpsi_mat <- do.call(rbind, drhodpsi_MAT)
@@ -253,17 +293,23 @@ if(asym_mean_PLRTH0Sat == 0) {
     asym_var_PLRTH0Sat <- 0
     scaling.factor <- as.numeric(NA)
     FSA_PLRT_SEM <- as.numeric(NA)
-    adjusted_df  <- as.numeric(NA)
+    adjusted_df  <- as.integer(NA)
+    pvalue <- as.numeric(NA)
+} else if(any(is.na(c(var_tzz, var_tww, cov_tzztww)))) {
+    asym_var_PLRTH0Sat <- as.numeric(NA)
+    scaling.factor <- as.numeric(NA)
+    FSA_PLRT_SEM <- as.numeric(NA)
+    adjusted_df  <- as.integer(NA)
     pvalue <- as.numeric(NA)
 } else {
     asym_var_PLRTH0Sat  <- var_tzz + var_tww -2*cov_tzztww
     scaling.factor <- (asym_mean_PLRTH0Sat / (asym_var_PLRTH0Sat/2) )
     FSA_PLRT_SEM <- (asym_mean_PLRTH0Sat / (asym_var_PLRTH0Sat/2) )* PLRTH0Sat
     adjusted_df  <- (asym_mean_PLRTH0Sat*asym_mean_PLRTH0Sat) / (asym_var_PLRTH0Sat/2)
-    # In some very few cases (simulations show very few cases in small 
+    # In some very few cases (simulations show very few cases in small
     # sample sizes) the adjusted_df is a negative number, we should then
     # print a warning like: "The adjusted df is computed to be a negative number
-    # and for this the first and second moment adjusted PLRT is not computed." 
+    # and for this the first and second moment adjusted PLRT is not computed."
     if(scaling.factor > 0) {
         pvalue <- 1-pchisq(FSA_PLRT_SEM, df=adjusted_df )
     } else {
@@ -272,7 +318,7 @@ if(asym_mean_PLRTH0Sat == 0) {
 }
 
 list(PLRTH0Sat = PLRTH0Sat, PLRTH0Sat.group = PLRTH0Sat.group,
-     stat = FSA_PLRT_SEM, df = adjusted_df, p.value = pvalue, 
+     stat = FSA_PLRT_SEM, df = adjusted_df, p.value = pvalue,
      scaling.factor = scaling.factor)
 }
 ############################################################################
@@ -291,13 +337,13 @@ ctr_pml_aic_bic <- function(lavobject) {
     logPL <- lavobject@optim$logl
     nsize <- lavobject@SampleStats@ntotal
 
-    # inverted observed unit information 
+    # inverted observed unit information
     H.inv <- lavTech(lavobject, "inverted.information.observed")
 
     # first order unit information
     J <- lavTech(lavobject, "information.first.order")
 
-    # trace (J %*% H.inv) = sum (J * t(H.inv)) 
+    # trace (J %*% H.inv) = sum (J * t(H.inv))
     dimTheta <- sum(J * H.inv)
 
 

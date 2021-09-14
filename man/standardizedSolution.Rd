@@ -6,9 +6,10 @@
 Standardized solution of a latent variable model.}
 \usage{
 standardizedSolution(object, type = "std.all", se = TRUE, zstat = TRUE, 
-                     pvalue = TRUE, ci = TRUE, level = 0.95, 
-                     remove.eq = TRUE, remove.ineq = TRUE, remove.def = FALSE,
-                     GLIST = NULL, est = NULL)
+                     pvalue = TRUE, ci = TRUE, level = 0.95, cov.std = TRUE, 
+                     remove.eq = TRUE, remove.ineq = TRUE, remove.def = FALSE, 
+                     partable = NULL, GLIST = NULL, est = NULL,
+                     output = "data.frame")
 }
 \arguments{
 \item{object}{An object of class \code{\linkS4class{lavaan}}.}
@@ -30,6 +31,14 @@ normal distribution.}
 \item{ci}{If \code{TRUE}, simple symmetric confidence intervals are added to 
 the output}
 \item{level}{The confidence level required.}
+\item{cov.std}{Logical. If TRUE, the (residual) observed
+covariances are scaled by the square root of the `Theta' diagonal elements, and
+the (residual) latent covariances are scaled by the square root of the `Psi'
+diagonal elements. If FALSE, the (residual) observed covariances
+are scaled by the square root of the diagonal elements of the observed
+model-implied covariance matrix (Sigma), and the (residual) latent covariances
+are scaled by the square root of diagonal elements of the model-implied
+covariance matrix of the latent variables.}
 \item{remove.eq}{Logical. If TRUE, filter the output by removing all rows 
 containing equality constraints, if any.}
 \item{remove.ineq}{Logical. If TRUE, filter the output by removing all
@@ -37,10 +46,24 @@ rows containing inequality constraints, if any.}
 \item{remove.def}{Logical. If TRUE, filter the ouitput by removing all
 rows containing parameter definitions, if any.}
 \item{GLIST}{List of model matrices. If provided, they will be used
-instead of the GLIST inside the object@Model slot.}
+instead of the GLIST inside the object@Model slot. Only works if the
+\code{est} argument is also provided. See Note.}
 \item{est}{Numeric. Parameter values (as in the `est' column of a
 parameter table). If provided, they will be used instead of 
-the parameters that can be extract from object.}
+the parameters that can be extract from object. Only works if the \code{GLIST} 
+argument is also provided. See Note.}
+\item{partable}{A custom \code{list} or \code{data.frame} in which to store
+the standardized parameter values. If provided, it will be used instead of 
+the parameter table inside the object@ParTable slot.}
+\item{output}{Character. If \code{"data.frame"}, the parameter table is
+displayed as a standard (albeit lavaan-formatted) data.frame.
+If \code{"text"} (or alias \code{"pretty"}), the parameter table is
+prettyfied, and displayed with subsections (as used by the summary function).}
+}
+\note{
+The \code{est}, \code{GLIST}, and \code{partable} arguments are not meant for
+everyday users, but for authors of external R packages that depend on
+\code{lavaan}. Only to be used with great caution.
 }
 \value{
   A data.frame containing standardized model parameters.

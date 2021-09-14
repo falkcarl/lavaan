@@ -7,26 +7,29 @@
 
 # YR 17 July 2012
 
-lav_func_gradient_complex <- function(func, x, 
-                                      h = .Machine$double.eps, ... , 
-                                      check.scalar = TRUE, 
+lav_func_gradient_complex <- function(func, x,
+                                      h = .Machine$double.eps, ... ,
                                       fallback.simple = TRUE) {
 
-    # check current point, see if it is a scalar function
-    if(check.scalar) {
-        f0 <- try(func(x*(0+1i), ...), silent = TRUE)
-        if(inherits(f0, "try-error")) {
-            if(fallback.simple) {
-                dx <- lav_func_gradient_simple(func = func, x = x, h = sqrt(h),
-                                               check.scalar = check.scalar, ...)
-                return(dx)
-            } else {
-                stop("function does not support non-numeric (complex) argument")
-            }
+    f0 <- try(func(x*(0+1i), ...), silent = TRUE)
+    if(!is.complex(f0)) {
+        if(fallback.simple) {
+            dx <- lav_func_gradient_simple(func = func, x = x, h = sqrt(h), ...)
+            return(dx)
+        } else {
+            stop("function does not return a complex value") # eg abs()
         }
-        if(length(f0) != 1L) {
-            stop("function is not scalar and returns more than one element")
+    }
+    if(inherits(f0, "try-error")) {
+        if(fallback.simple) {
+            dx <- lav_func_gradient_simple(func = func, x = x, h = sqrt(h), ...)
+            return(dx)
+        } else {
+            stop("function does not support non-numeric (complex) argument")
         }
+    }
+    if(length(f0) != 1L) {
+        stop("function is not scalar and returns more than one element")
     }
 
     nvar <- length(x)
@@ -48,16 +51,13 @@ lav_func_gradient_complex <- function(func, x,
 }
 
 # as a backup, if func() is not happy about non-numeric arguments
-lav_func_gradient_simple <- function(func, x, 
-                                     h = sqrt(.Machine$double.eps), ... , 
-                                     check.scalar = TRUE) {
+lav_func_gradient_simple <- function(func, x,
+                                     h = sqrt(.Machine$double.eps), ...) {
 
     # check current point, see if it is a scalar function
-    if(check.scalar) {
-        f0 <- func(x, ...)
-        if(length(f0) != 1L) {
-            stop("function is not scalar and returns more than one element")
-        }
+    f0 <- func(x, ...)
+    if(length(f0) != 1L) {
+        stop("function is not scalar and returns more than one element")
     }
 
     nvar <- length(x)
@@ -78,11 +78,19 @@ lav_func_gradient_simple <- function(func, x,
     dx
 }
 
-lav_func_jacobian_complex <- function(func, x, 
+lav_func_jacobian_complex <- function(func, x,
                                       h = .Machine$double.eps, ... ,
                                       fallback.simple = TRUE) {
 
     f0 <- try(func(x*(0+1i), ...), silent = TRUE)
+    if(!is.complex(f0)) {
+        if(fallback.simple) {
+            dx <- lav_func_jacobian_simple(func = func, x = x, h = sqrt(h), ...)
+            return(dx)
+        } else {
+            stop("function does not return a complex value") # eg abs()
+        }
+    }
     if(inherits(f0, "try-error")) {
         if(fallback.simple) {
             dx <- lav_func_jacobian_simple(func = func, x = x, h = sqrt(h), ...)
@@ -110,7 +118,7 @@ lav_func_jacobian_complex <- function(func, x,
     dx
 }
 
-lav_func_jacobian_simple <- function(func, x, 
+lav_func_jacobian_simple <- function(func, x,
                                      h = sqrt(.Machine$double.eps), ...) {
 
     f0 <- func(x, ...)
@@ -134,19 +142,18 @@ lav_func_jacobian_simple <- function(func, x,
 }
 
 # this is based on the Ridout (2009) paper, and the code snippet for 'h4'
-lav_func_hessian_complex <- function(func, x, 
-                                     h = .Machine$double.eps, ... , 
-                                     check.scalar = TRUE) {
+lav_func_hessian_complex <- function(func, x,
+                                     h = .Machine$double.eps, ...) {
 
-    # check current point, see if it is a scalar function
-    if(check.scalar) {
-        f0 <- try(func(x*(0+1i), ...), silent = TRUE)
-        if(inherits(f0, "try-error")) {
-            stop("function does not support non-numeric (complex) argument")
-        }
-        if(length(f0) != 1L) {
-            stop("function is not scalar and returns more than one element")
-        }
+    f0 <- try(func(x*(0+1i), ...), silent = TRUE)
+    if(!is.complex(f0)) {
+        stop("function does not return a complex value") # eg abs()
+    }
+    if(inherits(f0, "try-error")) {
+        stop("function does not support non-numeric (complex) argument")
+    }
+    if(length(f0) != 1L) {
+        stop("function is not scalar and returns more than one element")
     }
 
     nvar <- length(x)
@@ -166,10 +173,10 @@ lav_func_hessian_complex <- function(func, x,
                 delta <- delta1
             }
             H[i,j] <- H[j,i] <-
-                Im(func(x + delta*1i*(seq.int(nvar) == i)*x + 
+                Im(func(x + delta*1i*(seq.int(nvar) == i)*x +
                             delta*(seq.int(nvar) == j)*x, ...) -
-                   func(x + delta*1i*(seq.int(nvar) == i)*x - 
-                            delta*(seq.int(nvar) == j)*x, ...)) / 
+                   func(x + delta*1i*(seq.int(nvar) == i)*x -
+                            delta*(seq.int(nvar) == j)*x, ...)) /
                    (2*delta*delta*x[i]*x[j])
         }
     }
@@ -177,8 +184,25 @@ lav_func_hessian_complex <- function(func, x,
     H
 }
 
+lav_deriv_cov2corB <- function(COV = NULL) {
+    nvar <- nrow(COV)
+    dS.inv <- 1/diag(COV)
+    R <- cov2cor(COV)
+    A <-  -R %x% (0.5 * diag(dS.inv))
+    B <- (0.5 * diag(dS.inv)) %x% -R
+    DD <- diag(lav_matrix_vec(diag(nvar)))
+    A2 <- A %*% DD
+    B2 <- B %*% DD
+    out <- A2 + B2 + diag(lav_matrix_vec(tcrossprod(sqrt(dS.inv))))
+    D <- lav_matrix_duplication(nvar)
+    out.vech <- 0.5 * (t(D) %*% out %*% D)
+    out.vech
+
+}
+
 # quick and dirty (FIXME!!!) way to get
 # surely there must be a more elegant way?
+# see lav_deriv_cov2corB, if no num.idx...
 # dCor/dCov
 lav_deriv_cov2cor <- function(COV = NULL, num.idx = NULL) {
 

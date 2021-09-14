@@ -14,7 +14,7 @@ lav_partable_constraints_def <- function(partable, con = NULL, debug = FALSE,
 
     # get := definitions
     def.idx <- which(partable$op == ":=")
-    
+
     # catch empty def
     if(length(def.idx) == 0L) {
         if(txtOnly) {
@@ -89,7 +89,7 @@ lav_partable_constraints_def <- function(partable, con = NULL, debug = FALSE,
 #     eg. if b1 + b2 == 2 (and b1 correspond to, say,  x[10] and x[17])
 #         ceq <- function(x) {
 #             out <- rep(NA, 1)
-#             b1 = x[10]; b2 = x[17] 
+#             b1 = x[10]; b2 = x[17]
 #             out[1] <- b1 + b2 - 2
 #         }
 lav_partable_constraints_ceq <- function(partable, con = NULL, debug = FALSE,
@@ -104,7 +104,7 @@ lav_partable_constraints_ceq <- function(partable, con = NULL, debug = FALSE,
         partable$op  <- c(partable$op,  con$op )
         partable$rhs <- c(partable$rhs, con$rhs)
     }
-    
+
     # get equality constraints
     eq.idx <- which(partable$op == "==")
 
@@ -145,13 +145,13 @@ lav_partable_constraints_ceq <- function(partable, con = NULL, debug = FALSE,
     # get user-labels ids
     ulab.idx <- which(eq.labels %in% partable$label)
     if(length(ulab.idx) > 0L) {
-        eq.x.idx[ ulab.idx] <- partable$free[match(eq.labels[ulab.idx], 
+        eq.x.idx[ ulab.idx] <- partable$free[match(eq.labels[ulab.idx],
                                                    partable$label)]
     }
     # get plabels ids
     plab.idx <- which(eq.labels %in% partable$plabel)
     if(length(plab.idx) > 0L) {
-        eq.x.idx[ plab.idx] <- partable$free[match(eq.labels[plab.idx],  
+        eq.x.idx[ plab.idx] <- partable$free[match(eq.labels[plab.idx],
                                                    partable$plabel)]
     }
 
@@ -166,11 +166,26 @@ lav_partable_constraints_ceq <- function(partable, con = NULL, debug = FALSE,
         # FIXME: what should we do here? we used to stop with an error
         # from 0.5.18, we give a warning, and replace the non-free label
         # with its fixed value in ustart
-        warning("lavaan WARNING: non-free parameter(s) in equality constraint(s): ",
-            paste(eq.labels[fixed.eq.idx], collapse=" "))
+        #warning("lavaan WARNING: non-free parameter(s) in equality constraint(s): ",
+        #    paste(eq.labels[fixed.eq.idx], collapse=" "))
 
         fixed.lab.lhs <- eq.labels[fixed.eq.idx]
-        fixed.lab.rhs <- partable$ustart[match(fixed.lab.lhs, partable$label)]
+        fixed.lab.rhs <- numeric( length(fixed.lab.lhs) )
+
+        for(i in 1:length(fixed.lab.lhs)) {
+            # first try label
+            idx <- match(fixed.lab.lhs[i], partable$label)
+            # then try plabel
+            if(is.na(idx)) {
+                idx <- match(fixed.lab.lhs[i], partable$plabel)
+            }
+            if(is.na(idx)) {
+                # hm, not found? fill in zero, or NA?
+            } else {
+                fixed.lab.rhs[i] <- partable$ustart[idx]
+            }
+        }
+
         BODY.txt <- paste(BODY.txt, "# non-free parameter labels\n",
             paste(fixed.lab.lhs, "<-", fixed.lab.rhs, collapse="\n"),
             "\n", sep="")
@@ -192,7 +207,7 @@ lav_partable_constraints_ceq <- function(partable, con = NULL, debug = FALSE,
     for(i in 1:length(eq.idx)) {
         lhs <- partable$lhs[ eq.idx[i] ]
         rhs <- partable$rhs[ eq.idx[i] ]
-        if(rhs == "0") { 
+        if(rhs == "0") {
             eq.string <- lhs
         } else {
             eq.string <- paste(lhs, " - (", rhs, ")", sep="")
@@ -224,7 +239,7 @@ lav_partable_constraints_ceq <- function(partable, con = NULL, debug = FALSE,
 #     eg. if b1 + b2 > 2 (and b1 correspond to, say,  x[10] and x[17])
 #         cin <- function(x) {
 #             out <- rep(NA, 1)
-#             b1 = x[10]; b2 = x[17] 
+#             b1 = x[10]; b2 = x[17]
 #             out[1] <- b1 + b2 - 2
 #         }
 #
@@ -243,7 +258,7 @@ lav_partable_constraints_ciq <- function(partable, con = NULL, debug = FALSE,
         partable$op  <- c(partable$op,  con$op )
         partable$rhs <- c(partable$rhs, con$rhs)
     }
-    
+
     # get inequality constraints
     ineq.idx <- which(partable$op == ">" | partable$op == "<")
 
@@ -283,13 +298,13 @@ lav_partable_constraints_ciq <- function(partable, con = NULL, debug = FALSE,
     # get user-labels ids
     ulab.idx <- which(ineq.labels %in% partable$label)
     if(length(ulab.idx) > 0L) {
-        ineq.x.idx[ ulab.idx] <- partable$free[match(ineq.labels[ulab.idx], 
+        ineq.x.idx[ ulab.idx] <- partable$free[match(ineq.labels[ulab.idx],
                                                    partable$label)]
     }
     # get plabels ids
     plab.idx <- which(ineq.labels %in% partable$plabel)
     if(length(plab.idx) > 0L) {
-        ineq.x.idx[ plab.idx] <- partable$free[match(ineq.labels[plab.idx],  
+        ineq.x.idx[ plab.idx] <- partable$free[match(ineq.labels[plab.idx],
                                                    partable$plabel)]
     }
 
@@ -362,6 +377,7 @@ lav_partable_constraints_ciq <- function(partable, con = NULL, debug = FALSE,
 }
 
 lav_partable_constraints_label_id <- function(partable, con = NULL,
+                                              def = TRUE,
                                               warn = TRUE) {
 
     # if 'con', merge partable + con
@@ -370,9 +386,13 @@ lav_partable_constraints_label_id <- function(partable, con = NULL,
         partable$op  <- c(partable$op,  con$op )
         partable$rhs <- c(partable$rhs, con$rhs)
     }
-    
+
     # get constraints
-    con.idx <- which(partable$op %in% c("==", "<", ">"))
+    if(def) {
+        con.idx <- which(partable$op %in% c("==", "<", ">", ":="))
+    } else {
+        con.idx <- which(partable$op %in% c("==", "<", ">"))
+    }
 
     # catch empty con
     if(length(con.idx) == 0L) {
@@ -386,8 +406,8 @@ lav_partable_constraints_label_id <- function(partable, con = NULL,
     rhs.labels <- all.vars( parse(file="", text=partable$rhs[con.idx]) )
     con.labels <- unique(c(lhs.labels, rhs.labels))
 
-    # remove def.names from con.labels
-    if(length(def.idx) > 0L) {
+    # remove def.names from con.labels (unless def = TRUE)
+    if(!def && length(def.idx) > 0L) {
         def.names <- as.character(partable$lhs[def.idx])
         d.idx <- which(con.labels %in% def.names)
         if(length(d.idx) > 0) {
@@ -399,13 +419,13 @@ lav_partable_constraints_label_id <- function(partable, con = NULL,
     # get user-labels ids
     ulab.idx <- which(con.labels %in% partable$label)
     if(length(ulab.idx) > 0L) {
-        con.x.idx[ ulab.idx] <- partable$free[match(con.labels[ulab.idx], 
+        con.x.idx[ ulab.idx] <- partable$free[match(con.labels[ulab.idx],
                                                    partable$label)]
     }
     # get plabels ids
     plab.idx <- which(con.labels %in% partable$plabel)
     if(length(plab.idx) > 0L) {
-        con.x.idx[ plab.idx] <- partable$free[match(con.labels[plab.idx],  
+        con.x.idx[ plab.idx] <- partable$free[match(con.labels[plab.idx],
                                                    partable$plabel)]
     }
 
@@ -422,35 +442,4 @@ lav_partable_constraints_label_id <- function(partable, con = NULL,
 }
 
 
-# for all parameters in p1, find the 'id' of the corresponding parameter
-# in p2
-lav_partable_map_id_p1_in_p2 <- function(p1, p2) {
-
-    # get all parameters that have a '.p*' plabel
-    # (they exclude "==", "<", ">", ":=")
-    p1.idx <- which(grepl("\\.p", p1$plabel)); np1 <- length(p1.idx)
-
-    # return p2.id
-    p2.id <- integer(np1)
-
-    # check every parameter in p1
-    for(i in seq_len(np1)) {
-        # identify parameter in p1
-        lhs <- p1$lhs[i]; op <- p1$op[i]; rhs <- p1$rhs[i]; group <- p1$group[i]
-
-        # search for corresponding parameter in p2
-        p2.idx <- which(p2$lhs == lhs & p2$op == op & p2$rhs == rhs &
-                        p2$group == group)
-
-        # found?
-        if(length(p2.idx) == 0L) {
-            stop("lavaan ERROR: parameter in p1 not found in p2: ",
-                 paste(lhs, op, rhs, "(group = ", group, ")", sep=" "))
-        } else {
-            p2.id[i] <- p2.idx
-        }
-    }
-
-    p2.id
-}
 

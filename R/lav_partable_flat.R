@@ -6,6 +6,9 @@ lav_partable_flat <- function(FLAT = NULL,
                               int.ov.free      = FALSE,
                               int.lv.free      = FALSE,
                               orthogonal       = FALSE,
+                              orthogonal.y     = FALSE,
+                              orthogonal.x     = FALSE,
+                              orthogonal.efa   = FALSE,
                               std.lv           = FALSE,
                               conditional.x    = FALSE,
                               fixed.x          = TRUE,
@@ -17,15 +20,17 @@ lav_partable_flat <- function(FLAT = NULL,
                               auto.cov.y       = FALSE,
                               auto.th          = FALSE,
                               auto.delta       = FALSE,
+                              auto.efa         = FALSE,
                               varTable         = NULL,
                               group.equal      = NULL,
                               group.w.free     = FALSE,
-                              ngroups          = 1L) {
+                              ngroups          = 1L,
+                              ov.names.x.block = NULL) {
 
     categorical <- FALSE
 
     ### DEFAULT elements: parameters that are typically not specified by
-    ###                   users, but should typically be considered, 
+    ###                   users, but should typically be considered,
     ###                   either free or fixed
 
     # extract `names' of various types of variables:
@@ -33,7 +38,10 @@ lav_partable_flat <- function(FLAT = NULL,
     #lv.names.r   <- lav_partable_vnames(FLAT, type="lv.regular") # regular latent variables
     lv.names.f   <- lav_partable_vnames(FLAT, type="lv.formative") # formative latent variables
     ov.names     <- lav_partable_vnames(FLAT, type="ov")     # observed variables
-    ov.names.x   <- lav_partable_vnames(FLAT, type="ov.x")   # exogenous x covariates 
+    ov.names.x   <- lav_partable_vnames(FLAT, type="ov.x")   # exogenous x covariates
+    if(is.null(ov.names.x.block)) {
+        ov.names.x.block <- ov.names.x
+    }
     ov.names.nox <- lav_partable_vnames(FLAT, type="ov.nox")
     lv.names.x   <- lav_partable_vnames(FLAT, type="lv.x")   # exogenous lv
     ov.names.y   <- lav_partable_vnames(FLAT, type="ov.y")   # dependent ov
@@ -51,7 +59,7 @@ lav_partable_flat <- function(FLAT = NULL,
             warning("lavaan WARNING: thresholds are defined for exogenous variables: ", paste(ov.names.ord1[idx], collapse=" "))
         }
     }
- 
+
     if(!is.null(varTable)) {
         ov.names.ord2 <- as.character(varTable$name[ varTable$type == "ordered" ])
         # remove fixed.x variables
@@ -77,7 +85,7 @@ lav_partable_flat <- function(FLAT = NULL,
             nth <- varTable$nlev[ varTable$name == o ] - 1L
             nth.in.partable <- sum(FLAT$op == "|" & FLAT$lhs == o)
             if(nth != nth.in.partable) {
-                stop("lavaan ERROR: expected ", nth, 
+                stop("lavaan ERROR: expected ", max(0,nth),
                      " threshold(s) for variable ",
                      sQuote(o), "; syntax contains ", nth.in.partable, "\n")
             }
@@ -86,6 +94,38 @@ lav_partable_flat <- function(FLAT = NULL,
 
     if(length(ov.names.ord) > 0L)
         categorical <- TRUE
+
+    # std.lv = TRUE, group.equal includes "loadings"
+    #if(ngroups > 1L && std.lv && "loadings" %in% group.equal) {
+        # suggested by Michael Hallquist
+        # in 0.6.3, we gave a warning,
+        #warning("lavaan WARNING: std.lv = TRUE forces all variances to be unity in all groups, despite group.equal = \"loadings\"")
+        # in >0.6.4, we free the lv variances in all but the first group,
+    #}
+
+
+    # do we have any EFA lv's? they need special treatment if auto.efa = TRUE
+    if(!is.null(FLAT$efa) && auto.efa) {
+        lv.names.efa <- unique(FLAT$lhs[FLAT$op == "=~" &
+                                        nchar(FLAT$efa) > 0L])
+        # remove them from lv.names.x
+        #if(length(lv.names.x) > 0L) {
+        #    both.idx <- which(lv.names.x %in% lv.names.efa)
+        #    if(length(both.idx) > 0L) {
+        #        lv.names.x <- lv.names.x[ -both.idx ]
+        #    }
+        #}
+
+        # remove them from lvov.names.y
+        #if(length(lvov.names.y) > 0L) {
+        #    both.idx <- which(lvov.names.y %in% lv.names.efa)
+        #    if(length(both.idx) > 0L) {
+        #        lvov.names.y <- lvov.names.y[ -both.idx ]
+        #    }
+        #}
+    } else {
+        lv.names.efa <- character(0)
+    }
 
     lhs <- rhs <- character(0)
 
@@ -109,7 +149,7 @@ lav_partable_flat <- function(FLAT = NULL,
     # 2. default (residual) variances and covariances
 
     # a) (residual) VARIANCES (all ov's except exo, and all lv's)
-    # NOTE: change since 0.5-17: we ALWAYS include the vars in the 
+    # NOTE: change since 0.5-17: we ALWAYS include the vars in the
     #       parameter table; but only if auto.var = TRUE, we set them free
     #if(auto.var) {
         ov.var <- ov.names.nox
@@ -140,7 +180,20 @@ lav_partable_flat <- function(FLAT = NULL,
         lhs <- c(lhs, rep(ov.names.x,  each=nx)[idx]) # fill upper.tri
         rhs <- c(rhs, rep(ov.names.x, times=nx)[idx])
     }
- 
+
+    # e) efa latent variables COVARIANCES:
+    #if(auto.efa && length(lv.names.efa) > 1L) {
+    #    efa.values <- lav_partable_efa_values(FLAT)
+    #    for(set in efa.values) {
+    #        # correlated factors within each set
+    #        this.set.lv <- unique(FLAT$lhs[ FLAT$op == "=~" &
+    #                                        FLAT$efa == set ])
+    #        tmp <- utils::combn(this.set.lv, 2)
+    #        lhs <- c(lhs, tmp[1,]) # to fill upper.tri
+    #        rhs <- c(rhs, tmp[2,])
+    #    }
+    #}
+
     # create 'op' (thresholds come first, then variances)
     op <- rep("~~", length(lhs)); op[seq_len(nth)] <- "|"
 
@@ -148,7 +201,7 @@ lav_partable_flat <- function(FLAT = NULL,
     #    NOTE: - new in 0.5-19: ALWAYS include scaling parameters in partable,
     #            but only free them if auto.delta = TRUE (and parameterization
     #            is "delta"
-    #if(auto.delta && auto.th && length(ov.names.ord) > 0L && 
+    #if(auto.delta && auto.th && length(ov.names.ord) > 0L &&
     #   # length(lv.names) > 0L &&
     #   (ngroups > 1L || any(FLAT$op == "~*~") || parameterization == "theta")) {
     if(length(ov.names.ord) > 0L) {
@@ -178,7 +231,7 @@ lav_partable_flat <- function(FLAT = NULL,
     if(group.w.free) {
         lhs <- c(lhs, "group")
         rhs <- c(rhs, "w")
-         op <- c(op,  "%") 
+         op <- c(op,  "%")
     }
 
     DEFAULT <- data.frame(lhs=lhs, op=op, rhs=rhs,
@@ -201,11 +254,11 @@ lav_partable_flat <- function(FLAT = NULL,
     TMP <- USER[,1:3]
     idx <- which(duplicated(TMP))
     if(length(idx) > 0L) {
-        txt <- sapply(1:length(idx), function(i) { 
-            paste("    ", TMP[idx[i],"lhs"], 
-                          TMP[idx[i], "op"], 
+        txt <- sapply(1:length(idx), function(i) {
+            paste("    ", TMP[idx[i],"lhs"],
+                          TMP[idx[i], "op"],
                           TMP[idx[i],"rhs"]) })
-        warning("duplicated elements in model syntax have been ignored:\n", 
+        warning("duplicated elements in model syntax have been ignored:\n",
                 paste(txt, collapse = "\n"))
         USER <- USER[-idx,]
     }
@@ -213,7 +266,7 @@ lav_partable_flat <- function(FLAT = NULL,
     # check for duplicated elements in DEFAULT
     # - FIXME: can we not avoid this somehow??
     # - for example, if the user model includes 'x1 ~~ x1'
-    #   or 'x1 ~ 1' 
+    #   or 'x1 ~ 1'
     # - remove them from DEFAULT
     TMP <- rbind(DEFAULT[,1:3], USER[,1:3])
     idx <- which(duplicated(TMP, fromLast=TRUE)) # idx should be in DEFAULT
@@ -258,7 +311,7 @@ lav_partable_flat <- function(FLAT = NULL,
                          user == 0L)
         ustart[var.idx] <- 0.0
           free[var.idx] <- 0L
-    } else {
+    } else if(length(lv.names.f) > 0L) {
         # 'formative' (residual) variances are set to zero by default
         var.idx <- which(op == "~~" &
                          lhs == rhs &
@@ -277,9 +330,17 @@ lav_partable_flat <- function(FLAT = NULL,
         ustart[lv.var.idx] <- 1.0
           free[lv.var.idx] <- 0L
     }
+    if(auto.efa && length(lv.names.efa) > 0L) {
+        # fix lv variances of efa blocks to unity
+        lv.var.idx <- which(op == "~~" &
+                            lhs %in% lv.names.efa & lhs == rhs)
+        ustart[lv.var.idx] <- 1.0
+          free[lv.var.idx] <- 0L
+    }
     if(auto.fix.first) {
         # fix metric by fixing the loading of the first indicator
-        mm.idx <- which(op == "=~")
+        # (but not for efa factors)
+        mm.idx <- which(op == "=~" & !(lhs %in% lv.names.efa))
         first.idx <- mm.idx[which(!duplicated(lhs[mm.idx]))]
         ustart[first.idx] <- 1.0
           free[first.idx] <- 0L
@@ -295,10 +356,11 @@ lav_partable_flat <- function(FLAT = NULL,
             # get corresponding indicator if unique
             lhs.mm <- lhs[mm.idx]; rhs.mm <- rhs[mm.idx]
             single.ind <- rhs.mm[which(lhs.mm %in% lv.names.single &
+                                       lhs.mm != rhs.mm & # exclude phantom
                                        !(duplicated(rhs.mm) |
                                          duplicated(rhs.mm, fromLast=TRUE)))]
             # is the indicator unique?
-            if(length(single.ind)) {
+            if(length(single.ind) > 0L) {
                 var.idx <- which(op == "~~" & lhs %in% single.ind
                                             & rhs %in% single.ind
                                             & lhs == rhs
@@ -309,11 +371,41 @@ lav_partable_flat <- function(FLAT = NULL,
         }
     }
 
-    # 3. orthogonal=TRUE?
+    # 3. orthogonal = TRUE?
     if(orthogonal) {
-        # FIXME: only lv.x.idx for now
         lv.cov.idx <- which(op == "~~" &
                             lhs %in% lv.names &
+                            rhs %in% lv.names &
+                            lhs != rhs &
+                            user == 0L)
+        ustart[lv.cov.idx] <- 0.0
+          free[lv.cov.idx] <- 0L
+    }
+    # 3b. orthogonal.y = TRUE?
+    if(orthogonal.y) {
+        lv.cov.idx <- which(op == "~~" &
+                            lhs %in% lv.names.y &
+                            rhs %in% lv.names.y &
+                            lhs != rhs &
+                            user == 0L)
+        ustart[lv.cov.idx] <- 0.0
+          free[lv.cov.idx] <- 0L
+    }
+    # 3c. orthogonal.x = TRUE?
+    if(orthogonal.x) {
+        lv.cov.idx <- which(op == "~~" &
+                            lhs %in% lv.names.x &
+                            rhs %in% lv.names.x &
+                            lhs != rhs &
+                            user == 0L)
+        ustart[lv.cov.idx] <- 0.0
+          free[lv.cov.idx] <- 0L
+    }
+    # 3d. orthogonal.efa = TRUE?
+    if(orthogonal.efa) {
+        lv.cov.idx <- which(op == "~~" &
+                            lhs %in% lv.names.efa &
+                            rhs %in% lv.names.efa &
                             lhs != rhs &
                             user == 0L)
         ustart[lv.cov.idx] <- 0.0
@@ -346,14 +438,30 @@ lav_partable_flat <- function(FLAT = NULL,
             ustart[lv.int.idx] <- 0.0
               free[lv.int.idx] <- 0L
         }
+        # 4b. fixed effect (only if we have random slopes)
+        if(!is.null(FLAT$rv) && any(nchar(FLAT$rv) > 0L)) {
+            lv.names.rv <- lav_partable_vnames(FLAT, "lv.rv")
+            lv.rv.idx <- which(op == "~1" &
+                               lhs %in% lv.names.rv &
+                               user == 0L)
+            ustart[lv.rv.idx] <- as.numeric(NA)
+              free[lv.rv.idx] <- 1L
+        }
     }
 
+    # 4b. fixed effect (only if we have random slopes)
+    #if(!is.null(FLAT$rv)) {
+    #    }
+
     # 5. handle exogenous `x' covariates
-    if(length(ov.names.x) > 0) {
+    # usually, ov.names.x.block == ov.names.x
+    # except if multilevel, where 'splitted' ov.x are treated as endogenous
+    if(length(ov.names.x.block) > 0) {
 
         # 1. variances/covariances
         exo.var.idx  <- which(op == "~~" &
-                          rhs %in% ov.names.x &
+                          rhs %in% ov.names.x.block &
+                          lhs %in% ov.names.x.block &
                           user == 0L)
         if(fixed.x) {
             ustart[exo.var.idx] <- as.numeric(NA) # should be overriden later!
@@ -365,7 +473,7 @@ lav_partable_flat <- function(FLAT = NULL,
 
         # 2. intercepts
         exo.int.idx  <- which(op == "~1" &
-                              lhs %in% ov.names.x &
+                              lhs %in% ov.names.x.block &
                               user == 0L)
         if(fixed.x) {
             ustart[exo.int.idx] <- as.numeric(NA) # should be overriden later!
@@ -376,9 +484,9 @@ lav_partable_flat <- function(FLAT = NULL,
         #}
 
         # 3. regressions ov + lv
-        exo.reg.idx <- which(op == "~" &
+        exo.reg.idx <- which(op %in% c("~", "<~") &
                              lhs %in% c(lv.names, ov.names.nox) &
-                             rhs %in% ov.names.x)
+                             rhs %in% ov.names.x.block)
         if(conditional.x) {
             exo[exo.reg.idx] <- 1L
         }
@@ -449,6 +557,35 @@ lav_partable_flat <- function(FLAT = NULL,
                 }
             }
 
+            # latent variances if std.lv = TRUE (new in 0.6-4)
+            if(std.lv && "loadings" %in% group.equal &&
+               !"lv.variances" %in% group.equal) {
+                lv.var.idx <- which(op == "~~" &
+                                    lhs %in% lv.names &
+                                   !lhs %in% lv.names.efa &
+                                    lhs == rhs &
+                                    user == 0L &
+                                    group == g)
+                if(length(lv.var.idx) > 0L) {
+                    free[ lv.var.idx ] <- 1L
+                  ustart[ lv.var.idx ] <- as.numeric(NA)
+                }
+            }
+
+            # latent variances if efa = TRUE (new in 0.6-5)
+            if(auto.efa && "loadings" %in% group.equal &&
+               !"lv.variances" %in% group.equal) {
+                lv.var.idx <- which(op == "~~" &
+                                    lhs %in% lv.names.efa &
+                                    lhs == rhs &
+                                    user == 0L &
+                                    group == g)
+                if(length(lv.var.idx) > 0L) {
+                    free[ lv.var.idx ] <- 1L
+                  ustart[ lv.var.idx ] <- as.numeric(NA)
+                }
+            }
+
             # latent response scaling
             if(auto.delta && parameterization == "delta") {
                 if(any(op == "~*~" & group == g) &&
@@ -497,7 +634,7 @@ lav_partable_flat <- function(FLAT = NULL,
         # for now, only group
         LIST$block <- group
     }
-    
+
     # block columns (typically only group)
     for(block in blocks) {
         if(block == "group") {

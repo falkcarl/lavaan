@@ -13,26 +13,33 @@ function \code{lavaanify} turns it into a table that represents the full
 model as specified by the user. We refer to this table as the parameter table.} 
 \usage{
 lavaanify(model = NULL, meanstructure = FALSE, int.ov.free = FALSE, 
-    int.lv.free = FALSE, orthogonal = FALSE, std.lv = FALSE, 
-    conditional.x = FALSE, fixed.x = TRUE, parameterization = "delta", 
+    int.lv.free = FALSE, orthogonal = FALSE, orthogonal.y = FALSE,
+    orthogonal.x = FALSE, orthogonal.efa = FALSE, std.lv = FALSE, 
+    effect.coding = "",
+    conditional.x = FALSE, fixed.x = FALSE, parameterization = "delta", 
     constraints = NULL, auto = FALSE, model.type = "sem", 
     auto.fix.first = FALSE, auto.fix.single = FALSE, auto.var = FALSE, 
     auto.cov.lv.x = FALSE, auto.cov.y = FALSE, auto.th = FALSE, 
-    auto.delta = FALSE, varTable = NULL, ngroups = 1L, group.equal = NULL, 
+    auto.delta = FALSE, auto.efa = FALSE, 
+    varTable = NULL, ngroups = 1L, group.equal = NULL, 
     group.partial = NULL, group.w.free = FALSE,
     debug = FALSE, warn = TRUE, as.data.frame. = TRUE)
 
 lavParTable(model = NULL, meanstructure = FALSE, int.ov.free = FALSE,
-    int.lv.free = FALSE, orthogonal = FALSE, std.lv = FALSE,
-    conditional.x = FALSE, fixed.x = TRUE, parameterization = "delta", 
+    int.lv.free = FALSE, orthogonal = FALSE, orthogonal.y = FALSE, 
+    orthogonal.x = FALSE, orthogonal.efa = FALSE, std.lv = FALSE,
+    effect.coding = "",
+    conditional.x = FALSE, fixed.x = FALSE, parameterization = "delta", 
     constraints = NULL, auto = FALSE, model.type = "sem",
     auto.fix.first = FALSE, auto.fix.single = FALSE, auto.var = FALSE,
     auto.cov.lv.x = FALSE, auto.cov.y = FALSE, auto.th = FALSE,
-    auto.delta = FALSE, varTable = NULL, ngroups = 1L, group.equal = NULL,
+    auto.delta = FALSE, auto.efa = FALSE,
+    varTable = NULL, ngroups = 1L, group.equal = NULL,
     group.partial = NULL, group.w.free = FALSE,
     debug = FALSE, warn = TRUE, as.data.frame. = TRUE)
 
-lavParseModelString(model.syntax = '', as.data.frame.=FALSE, warn=TRUE, debug=FALSE)
+lavParseModelString(model.syntax = '', as.data.frame. = FALSE, 
+                    warn = TRUE, debug = FALSE)
 
 }
 \arguments{
@@ -48,12 +55,35 @@ the model both for both observed and latent variables.}
     are fixed to zero.}
 \item{int.lv.free}{If \code{FALSE}, the intercepts of the latent variables
     are fixed to zero.}
-\item{orthogonal}{If \code{TRUE}, the exogenous latent variables
-    are assumed to be uncorrelated.}
+\item{orthogonal}{If \code{TRUE}, all covariances among
+   latent variables are set to zero.}
+\item{orthogonal.y}{If \code{TRUE}, all covariances among
+   endogenous latent variables only are set to zero.}
+\item{orthogonal.x}{If \code{TRUE}, all covariances among
+   exogenous latent variables only are set to zero.}
+\item{orthogonal.efa}{If \code{TRUE}, all covariances among
+   latent variables involved in rotation only are set to zero.}
 \item{std.lv}{If \code{TRUE}, the metric of each latent variable is
     determined by fixing their variances to 1.0. If \code{FALSE}, the metric
     of each latent variable is determined by fixing the factor loading of the
-    first indicator to 1.0.}
+    first indicator to 1.0. If there are multiple
+      groups, \code{std.lv = TRUE} and \code{"loadings"} is included in 
+      the \code{group.label} argument, then only the latent variances i
+      of the first group will be fixed to 1.0, while the latent
+      variances of other groups are set free.}
+\item{effect.coding}{Can be logical or character string. If
+     logical and \code{TRUE}, this implies     
+     \code{effect.coding = c("loadings", "intercepts")}. If logical and 
+     \code{FALSE}, it is set equal to the empty string. 
+     If \code{"loadings"} is included, equality
+     constraints are used so that the average of the factor loadings (per
+     latent variable) equals 1. Note that this should not be used 
+     together with \code{std.lv = TRUE}. If \code{"intercepts"} is
+     included, equality constraints are used so that the sum of the
+     intercepts (belonging to the indicators of a single latent variable)
+     equals zero.
+     As a result, the latent mean will be freely estimated and usually
+     equal the average of the means of the involved indicators.}
 \item{conditional.x}{If \code{TRUE}, we set up the model conditional on
     the exogenous `x' covariates; the model-implied sample statistics
     only include the non-x variables. If \code{FALSE}, the exogenous `x'
@@ -87,6 +117,11 @@ the model both for both observed and latent variables.}
     are included in the model and set free.}
 \item{auto.delta}{If \code{TRUE}, response scaling parameters for limited
     dependent variables are included in the model and set free.}
+\item{auto.efa}{If \code{TRUE}, the necessary constraints are
+    imposed to make the (unrotated) exploratory factor analysis blocks
+    identifiable: for each block, factor variances are set to 1, factor
+    covariances are constrained to be zero, and factor loadings are
+    constrained to follow an echelon pattern.}
 \item{varTable}{The variable table containing information about the
     observed variables in the model.}
 \item{ngroups}{The number of (independent) groups.}
@@ -95,7 +130,11 @@ the model both for both observed and latent variables.}
     \code{"loadings"}, \code{"intercepts"},
     \code{"means"}, \code{"regressions"}, \code{"residuals"} or
     \code{"covariances"}, specifying the pattern of equality
-    constraints across multiple groups.}
+    constraints across multiple groups. When (in the model syntax) a vector 
+    of labels is used as a modifier for a certain parameter, this will 
+    override the group.equal setting if it applies to this parameter. 
+    See also the Multiple groups section below for using modifiers in multiple
+    groups.}
 \item{group.partial}{A vector of character strings containing the labels
     of the parameters which should be free in all groups (thereby
     overriding the group.equal argument for some specific parameters).}
@@ -282,8 +321,8 @@ a character string (starting with a letter).
 For example, in the formula \code{f1 =~ x1 + x2 + mylabel*x3}, the parameter 
 corresponding with the factor loading of
 \code{x3} will be named \code{"mylabel"}.
-An alternative way to specify
-the label is as follows: \code{f1 =~ x1 + x2 + label("mylabel")*x3}, 
+An alternative way to specify the label is as follows: 
+\code{f1 =~ x1 + x2 + label("mylabel")*x3}, 
 where the label is the argument of special function \code{label()};
 this can be useful if the label contains a space, or an operator (like "~").
 
@@ -320,19 +359,22 @@ names. For the last three, we have provided a custom label for the
 }
 
 \section{Multiple groups}{
-In a multiple group analysis, modifiers that contain a single constant
-must be replaced by a vector, having the same length as the number
-of groups. The only exception are numerical constants (for fixing values): if
-you provide only a single number, the same number will be used for all groups.
-However, it is safer (and cleaner) to specify the same number of elements as
-the number of groups. For example, if there are two groups:
+In a multiple group analysis, modifiers that contain a single element
+should be replaced by a vector, having the same length as the number
+of groups. If you provide a single element, it will be recycled
+for all the groups. This may be dangerous, in particular when the modifier
+is a label. In that case, the (same) label is copied across all groups,
+and this would imply an equality constraint across groups.
+Therefore, when using modifiers in a multiple group setting, it is always  
+safer (and cleaner) to specify the same number of 
+elements as the number of groups. Consider this example with two groups:
 \preformatted{
 HS.model <- ' visual  =~ x1 + 0.5*x2 + c(0.6, 0.8)*x3
               textual =~ x4 + start(c(1.2, 0.6))*x5 + x6
               speed   =~ x7 + x8 + c(x9.group1, x9.group2)*x9 '
 }
 In this example, the factor loading of the `x2' indicator is fixed to the
-value 0.5 for all groups. However, the factor loadings of the `x3' indicator 
+value 0.5 for both groups. However, the factor loadings of the `x3' indicator 
 are fixed to 0.6 and 0.8 for group 1 and group 2 respectively. The same
 logic is used for all modifiers. Note that character vectors can contain
 unquoted strings.

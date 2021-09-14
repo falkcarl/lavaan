@@ -16,7 +16,7 @@ lav_samplestats_Gamma_inverse_NT <- function(Y              = NULL,
                                              COV            = NULL,
                                              ICOV           = NULL,
                                              MEAN           = NULL,
-                                             rescale        = FALSE,
+                                             rescale        = TRUE,
                                              x.idx          = integer(0L),
                                              fixed.x        = FALSE,
                                              conditional.x  = FALSE,
@@ -32,21 +32,20 @@ lav_samplestats_Gamma_inverse_NT <- function(Y              = NULL,
     if(is.null(ICOV)) {
         if(is.null(COV)) {
             stopifnot(!is.null(Y))
-    
+
             # coerce to matrix
             Y <- unname(as.matrix(Y)); N <- nrow(Y)
             COV <- cov(Y)
-        }
-
-        if(rescale) {
-            COV <- COV * (N-1) / N # ML version
+            if(rescale) {
+                COV <- COV * (N-1) / N # ML version
+            }
         }
 
         ICOV <- solve(COV)
     }
 
     # if conditional.x, we may also need COV and MEAN
-    if(conditional.x && length(x.idx) > 0L && 
+    if(conditional.x && length(x.idx) > 0L &&
        (meanstructure || slopestructure)) {
 
         if(is.null(COV)) {
@@ -103,7 +102,7 @@ lav_samplestats_Gamma_inverse_NT <- function(Y              = NULL,
         }
 
     } else {
-        # conditional.x 
+        # conditional.x
 
         # 4 possibilities:
         # - no meanstructure, no slopes
@@ -124,7 +123,7 @@ lav_samplestats_Gamma_inverse_NT <- function(Y              = NULL,
 
         if(meanstructure) {
             if(slopestructure) {
-                A11 <- C3 %x% S11 
+                A11 <- C3 %x% S11
             } else {
                 c11 <- 1 / solve(C3)[1, 1, drop=FALSE]
                 A11 <- c11 %x% S11
@@ -141,7 +140,7 @@ lav_samplestats_Gamma_inverse_NT <- function(Y              = NULL,
             Gamma.inv <- lav_matrix_bdiag(A11, Gamma.inv)
         }
     }
-   
+
     Gamma.inv
 }
 

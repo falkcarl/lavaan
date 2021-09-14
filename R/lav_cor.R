@@ -1,22 +1,26 @@
-# user-visible routine to 
+# user-visible routine to
 # compute polychoric/polyserial/... correlations
 #
 # YR 17 Sept 2013
-# 
+#
 # - YR 26 Nov 2013: big change - make it a wrapper around lavaan()
 #                   estimator = "none" means two.step (starting values)
 
-lavCor <- function(object, 
+lavCor <- function(object,
                    # lav.data options
-                   ordered    = NULL, 
-                   group      = NULL, 
+                   ordered    = NULL,
+                   group      = NULL,
                    missing    = "listwise",
-                   ov.names.x = NULL, 
+                   ov.names.x = NULL,
                    # lavaan options
-                   se         = "none", 
+                   se         = "none",
+                   test       = "none",
                    estimator  = "two.step",
+                   baseline   = FALSE,
                    # other options (for lavaan)
                    ...,
+                   cor.smooth = FALSE,
+                   cor.smooth.tol = 1e-06,
                    output = "cor") {
 
     # shortcut if object = lavaan object
@@ -48,7 +52,7 @@ lavCor <- function(object,
         if(!is.null(group)) {
             NAMES <- NAMES[- match(group, NAMES)]
         }
-        lav.data <- lavData(data = object, group = group, 
+        lav.data <- lavData(data = object, group = group,
                             ov.names = NAMES, ordered = ordered,
                             ov.names.x = ov.names.x,
                             lavoptions = list(missing = missing))
@@ -69,14 +73,14 @@ lavCor <- function(object,
 
     # extract partable options from dots
     dots <- list(...)
-    meanstructure <- FALSE 
+    meanstructure <- FALSE
     fixed.x       <- FALSE
     mimic         <- "lavaan"
     conditional.x <- FALSE
     if(!is.null(dots$meanstructure)) {
         meanstructure <- dots$meanstructure
-    } 
-    if(categorical) {
+    }
+    if(categorical || tolower(missing) %in% c("ml", "fiml", "direct")) {
         meanstructure <- TRUE
     }
     if(!is.null(dots$fixed.x)) {
@@ -89,25 +93,42 @@ lavCor <- function(object,
         conditional.x <- dots$conditional.x
     }
 
+
+    # override, only for backwards compatibility (eg moments() in JWileymisc)
+    #if(missing %in% c("ml", "fiml")) {
+    #    meanstructure = TRUE
+    #}
+
     # generate partable for unrestricted model
-    PT.un <- 
+    PT.un <-
         lav_partable_unrestricted(lavobject     = NULL,
                                   lavdata       = lav.data,
                                   lavoptions    = list(meanstructure = meanstructure,
                                                        fixed.x = fixed.x,
                                                        conditional.x = conditional.x,
+                                                       group.w.free = FALSE,
+                                                       missing = missing,
                                                        mimic = mimic),
                                   sample.cov    = NULL,
                                   sample.mean   = NULL,
                                   sample.th     = NULL)
 
-    
+
     FIT <- lavaan(slotParTable = PT.un, slotData = lav.data,
                   model.type = "unrestricted",
                   missing = missing,
-                  se = se, estimator = estimator, ...)
+                  baseline = baseline, h1 = TRUE, # must be TRUE!
+                  se = se, test = test, estimator = estimator, ...)
 
     out <- lav_cor_output(FIT, output = output)
+
+    # smooth correlation matrix? (only if output = "cor")
+    if(output == "cor" && cor.smooth) {
+        tmp.attr <- attributes(out)
+        out <- cov2cor(lav_matrix_symmetric_force_pd(out, tol = cor.smooth.tol))
+        # we lost most of the attributes
+        attributes(out) <- tmp.attr
+    }
 
     out
 }
@@ -116,7 +137,7 @@ lav_cor_output <- function(object, output = "cor") {
 
     # check output
     if(output %in% c("cor","cov")) {
-        out <- inspect(object, "sampstat")
+        out <- lavInspect(object, "sampstat")
         if(object@Data@ngroups == 1L) {
             if(object@Model@conditional.x) {
                 out <- out$res.cov
@@ -153,7 +174,7 @@ lav_cor_output <- function(object, output = "cor") {
         }
     } else if(output %in% c("sampstat")) {
         out <- inspect(object, "sampstat")
-    } else if(output %in% c("parameterEstimates", "pe", 
+    } else if(output %in% c("parameterEstimates", "pe",
               "parameterestimates", "est")) {
         #out <- parameterEstimates(object)
         out <- standardizedSolution(object)
