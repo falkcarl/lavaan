@@ -63,9 +63,9 @@ The \code{lciProfile} function is intended to be useful for diagnostic purposes 
 }
 
 \references{
-Falk, C. F. (in press). Are robust standard errors the best approach for
-interval estimation with non-normal data in structural equation modeling?
-\emph{Structural Equation Modeling: A Multidisciplinary Journal}.
+Falk, C.F. (2018). Are robust standard errors the best approach for interval
+estimation with non-normal data in structural equation modeling? \emph{Structural Equation
+Modeling: A Multidisciplinary Journal}, 25, 244-266.
 
 Neale, M. C., & Miller, M. B. (1997). The use of likelihood-based confidence intervals
 in genetic models. \emph{Behavior Genetics, 27,} 113--120.
