@@ -650,13 +650,6 @@ lav_start <- function(start.method    = "default",
         #                    lavpartable$lhs %in% lv.names)
     }
 
-    # TODO: can this be nuked?
-    # CFF 2017-10-04 - moved to here as temporary fix to satorra.bentler.2010
-    # was after following if/else statement
-    # override if the model syntax contains explicit starting values
-    user.idx <- which(!is.na(lavpartable$ustart))
-    start[user.idx] <- lavpartable$ustart[user.idx]
-    
     # adjust if outside bounds -- new in 0.6-6
     if(!is.null(lavpartable$lower)) {
         bad.idx <- which(start < lavpartable$lower)
