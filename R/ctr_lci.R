@@ -6,7 +6,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
-              reoptimize=TRUE,
+              reoptimize=FALSE,
               iterlim=50,control=list()){
 
   ## input checking
@@ -131,60 +131,63 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
                       start,diff.method, Dtol, iterlim, control)
     
     # Troubleshoot any problems
-    if(LCI$bound<=result$est & b=="upper" | LCI$bound>=result$est & b=="lower"){
-      warning("CI boundary on wrong side of estimate ", b)
-      if(reoptimize & ci.method=="NealeMiller1997"){
-        warning("Attempting to re-optimize by moving starting values")
+    if(!is.na(LCI$bound)){    
+      if(LCI$bound<=result$est & b=="upper" | LCI$bound>=result$est & b=="lower"){
+        warning("CI boundary on wrong side of estimate ", b)
+        if(reoptimize & ci.method=="NealeMiller1997"){
+          warning("Attempting to re-optimize by moving starting values")
 
-        # Obtain SE
-        #pest<-parameterEstimates(object)
-        se<-ptable$se[pindx[1]]
-        
-        # Obtain new starting model with function of interest moved slightly towards boundary
-        newstart<-ifelse(b=="upper", est+.25*se,est-.25*se)
-        
-        # Make necessary adjustments to start values in case of function of model parameters
-        if(ptable$op[pindx]==":=" & (diff.method[1]=="satorra.2000"|object@Options$estimator=="ML"& !diff.method[1] %in% c("satorra.bentler.2010","satorra.bentler.2001"))){
-          const<-list()
-          const[[label]]<-newstart
-          tmp<-lci_refit(fit,const)
-          ptabtmp<-parTable(tmp)
-          tmplabel<-all.vars(parse(file="", text=ptabtmp$rhs[pindx]))
-          newstart<-ptabtmp$est[match(tmplabel,ptabtmp$label)]
-        }
-        
-        # Call lci_internal again with start replaced by newstart
-        LCI<-lci_internal(fit, label, est, ptable, pindx,
-                          crit, b, chat, optimizer, ci.method,
-                          newstart,diff.method, Dtol, iterlim, control)
-      }
-    } else if (abs(LCI$D-crit)>Dtol) {
-      warning("Tolerance level for chi-square difference test not met for CI boundary ", b,".
-                An obtained difference test at the CI boundary might not be close to the desired critical value")
-      if(reoptimize & ci.method=="NealeMiller1997"){
-        warning("Attempting to re-optimize by bisection")
-        
-        tmpstart<-LCI$bound
-        
-        if (LCI$D<crit){
-          # If there is bias, usually we miss with a D that is too high
-          # Could be a sign that no boundary can be found due to insufficient information
-          
-          # Obtain standard errors
+          # Obtain SE
           #pest<-parameterEstimates(object)
           se<-ptable$se[pindx[1]]
-          
-          # Adjust starting values
-          tmpstart<-LCI$bound
-          tmpstart<-ifelse(b=="upper", tmpstart+.5*se,tmpstart-.5*se)
+        
+          # Obtain new starting model with function of interest moved slightly towards boundary
+          newstart<-ifelse(b=="upper", est+.25*se,est-.25*se)
+        
+          # Make necessary adjustments to start values in case of function of model parameters
+          if(ptable$op[pindx]==":=" & (diff.method[1]=="satorra.2000"|object@Options$estimator=="ML"& !diff.method[1] %in% c("satorra.bentler.2010","satorra.bentler.2001"))){
+            const<-list()
+            const[[label]]<-newstart
+            tmp<-lci_refit(fit,const)
+            ptabtmp<-parTable(tmp)
+            tmplabel<-all.vars(parse(file="", text=ptabtmp$rhs[pindx]))
+            newstart<-ptabtmp$est[match(tmplabel,ptabtmp$label)]
+          }
+        
+          # Call lci_internal again with start replaced by newstart
+          LCI<-lci_internal(fit, label, est, ptable, pindx,
+                            crit, b, chat, optimizer, ci.method,
+                            newstart,diff.method, Dtol, iterlim, control)
         }
+      } else if (abs(LCI$D-crit)>Dtol) {
+        warning("Tolerance level for chi-square difference test not met for CI boundary ", b,".
+                  An obtained difference test at the CI boundary might not be close to the desired critical value")
+        if(reoptimize & ci.method=="NealeMiller1997"){
+          warning("Attempting to re-optimize by bisection")
         
-        # Call lci_internal via bisection
-        LCI<-lci_internal(fit, label, est, ptable, pindx,
-                          crit, b, chat, optimizer, "bisect",
-                          tmpstart,diff.method, Dtol, iterlim, control)
+          tmpstart<-LCI$bound
         
+          if (LCI$D<crit){
+            # If there is bias, usually we miss with a D that is too high
+            # Could be a sign that no boundary can be found due to insufficient information
+          
+            # Obtain standard errors
+            #pest<-parameterEstimates(object)
+            se<-ptable$se[pindx[1]]
+          
+            # Adjust starting values
+            tmpstart<-LCI$bound
+            tmpstart<-ifelse(b=="upper", tmpstart+.5*se,tmpstart-.5*se)
+          }
+        
+          # Call lci_internal via bisection
+          LCI<-lci_internal(fit, label, est, ptable, pindx,
+                            crit, b, chat, optimizer, "bisect",
+                            tmpstart,diff.method, Dtol, iterlim, control)
+        }        
       }
+    } else {
+      warning(b, " boundary not found")
     }
     
     # Save results
