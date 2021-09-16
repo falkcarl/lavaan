@@ -19,10 +19,14 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   if(level <=0 | level >=1){
     stop("level must be between 0 and 1")
   }
-  if(ci.method=="bisect" & object@Options$se=="none" & is.null(start)){
-    stop("Bisection requires either standard errors to aid in determining where to start the algorithm (change se='none' to something else) or a custom start value.")
+  if(is.null(start)){
+    if((ci.method=="bisect"|ci.method=="uniroot") & object@Options$se=="none"){
+      warning("Bisection requires either standard errors to aid in determining where to start the algorithm (change se='none' to something else) or a custom start value.")
+      object@Options$se<-"standard"
+      object<-lci_refit(object)
+    }
   }
-  if(!ci.method %in% c("NealeMiller1997","bisect")){
+  if(!ci.method %in% c("NealeMiller1997","bisect","uniroot")){
     stop("Unsupported CI estimation method.")
   }
   
@@ -285,6 +289,23 @@ lci_internal<-function(object, label, est, ptable,
     } else{
       est.bound<-NA
     }
+  } else if (ci.method[1]=="uniroot"){
+    if(diff.method[1]=="satorra.2000"){
+      diff.method<-"default"
+    }
+    LCI<-lci_uniroot(object,label,crit,tol=Dtol*.002,bound=bound,
+                                      diff.method=diff.method,iterlim=iterlim,
+                                      chat=chat,start=start)
+    if(class(LCI)!="try-error" & any(!is.na(LCI))){
+      D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
+      attr(D,"mod")<-NULL
+      est.bound<-LCI$est
+      conv<-LCI$iter
+    } else{
+      est.bound<-NA
+      conv<-NA
+      D<-NA
+    }
   } else {
     stop("Unsupported ci.type and/or optimizer")
   }
@@ -499,6 +520,79 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("low
     }
   }
   return(list(est=p1,D=D1,iter=count-1,fariter=fariter))
+  
+}
+
+lci_uniroot<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=3,bound=c("lower","upper"),
+                      diff.method="default",chat=1,start=NULL){
+  
+  ## extract parameter table
+  ptable<-parTable(fitmodel)
+  
+  ## Look for parameter label
+  pindx<-which(ptable$label==label)
+  
+  if(length(pindx)<1){
+    stop("Parameter label not found in lavaan parameter table.")
+  }
+  
+  ## point estimate based on fitted model
+  est<-ptable$est[pindx[1]]
+  ## standard error
+  se<-ptable$se[pindx[1]]
+  
+  # function to minimize: difference for difference test
+  f<-function(x,fitmodel,label,diff.method,chat,crit){
+    D<-lci_diff_test(x,fitmodel,label,diff.method=diff.method,chat=chat)
+    if(is.na(D)){
+      return(.Machine$double.xmax) # ensures that uniroot has something to work with
+    } else{
+      return(D-crit)
+    }
+  }
+  
+  ## p0 is at the MLE
+  p0<-est
+  
+  ## Pick another endpoint for boundary
+  sign<-ifelse(bound=="lower",-1,1)
+  
+  if(!is.null(start)){
+    
+    ## Custom p2
+    if((start<est & bound=="upper")|(start>est & bound=="lower")){
+      stop("Custom starting value for bisection on wrong side of estimate.") 
+    }
+    p2<-start
+    
+  } else {
+    
+    ## Guess a starting point for p2 based on point estimate and multiplier w/ se
+    p2<-est+sign*init*se*sqrt(crit)
+    
+    tmp<-f(p2,fitmodel,label,diff.method,chat,crit)
+    count<-1
+    while(!tmp>0 & count < iterlim){
+      init<-init*1.1
+      p2<-est+sign*init*se*sqrt(crit)
+      tmp<-f(p2,fitmodel,label,diff.method,chat,crit)
+      count<-count+1
+    }
+  }
+  
+  # obtain result using uniroot
+  # interval is between p0 and p2
+  result<-try(uniroot(f,c(p0,p2), fitmodel=fitmodel, label=label, diff.method=diff.method,
+                  chat=chat, crit=crit, tol=tol, maxiter=iterlim),silent=TRUE)
+  
+  if(class(result)!="try-error"){
+    endpoint<-result$root
+    D<-lci_diff_test(est,fitmodel,label,diff.method=diff.method,chat=chat)
+    iter<-result$iter
+    return(list(est=endpoint,D=D,iter=iter))
+  } else {
+    return(NA)
+  }
   
 }
 
