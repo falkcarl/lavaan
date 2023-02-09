@@ -7,7 +7,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
               reoptimize=FALSE,
-              iterlim=50,control=list()){
+              iterlim=50,control=list(),...){
 
   ## input checking
   if(class(object)!="lavaan"){
@@ -126,12 +126,12 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   # Begin optimization for each bound
   for(b in bound){
     
-    LCI<-lci_internal(fit, label, est, ptable, pindx,
+    LCI<-lci_internal(fit, label, level, est, ptable, pindx,
                       crit, b, chat, optimizer, ci.method,
-                      start,diff.method, Dtol, iterlim, control)
+                      start,diff.method, Dtol, iterlim, control,...)
     
     # Troubleshoot any problems
-    if(!is.na(LCI$bound)){    
+    if(!is.na(LCI$bound)){
       if(LCI$bound<=result$est & b=="upper" | LCI$bound>=result$est & b=="lower"){
         warning("CI boundary on wrong side of estimate ", b)
         if(reoptimize & ci.method=="NealeMiller1997"){
@@ -155,9 +155,9 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
           }
         
           # Call lci_internal again with start replaced by newstart
-          LCI<-lci_internal(fit, label, est, ptable, pindx,
+          LCI<-lci_internal(fit, label, level, est, ptable, pindx,
                             crit, b, chat, optimizer, ci.method,
-                            newstart,diff.method, Dtol, iterlim, control)
+                            newstart,diff.method, Dtol, iterlim, control,...)
         }
       } else if (abs(LCI$D-crit)>Dtol) {
         warning("Tolerance level for chi-square difference test not met for CI boundary ", b,".
@@ -181,10 +181,10 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
           }
         
           # Call lci_internal via bisection
-          LCI<-lci_internal(fit, label, est, ptable, pindx,
                             crit, b, chat, optimizer, "bisect",
-                            tmpstart,diff.method, Dtol, iterlim, control)
-        }        
+          LCI<-lci_internal(fit, label, level, est, ptable, pindx,
+                            tmpstart,diff.method, Dtol, iterlim, control,...)
+        }
       }
     } else {
       warning(b, " boundary not found")
@@ -205,12 +205,12 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
   return(result)
 }
 
-lci_internal<-function(object, label, est, ptable,
+lci_internal<-function(object, label, level, est, ptable,
                        pindx, crit, bound, chat,
                        optimizer="Rsolnp",
                        ci.method="NealeMiller1997",
                        start=NULL,diff.method="default",Dtol=.05,
-                       iterlim=50,control=list()){
+                       iterlim=50,control=list(),...){
   
   ret<-list()
   D<-NULL
@@ -240,7 +240,7 @@ lci_internal<-function(object, label, est, ptable,
       }
       LCI<-suppressWarnings(try(Rsolnp::solnp(start,fitfunc,fitmodel=object,
                                               label=label, pindx=pindx, crit=crit, bound=bound,
-                                              diff.method=diff.method,chat=chat,control=control)))
+                                              diff.method=diff.method,chat=chat,control=control,...)))
       
       if(class(LCI)!="try-error"){
         D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method,chat=chat)
@@ -253,7 +253,7 @@ lci_internal<-function(object, label, est, ptable,
     } else if (optimizer[1]=="optim"){
       LCI<-suppressWarnings(try(optim(start, fitfunc,fitmodel=object,
                                       label=label, pindx=pindx, crit=crit, bound=bound,
-                                      diff.method=diff.method,chat=chat,method="BFGS",control=control)))
+                                      diff.method=diff.method,chat=chat,control=control,...)))
       if(class(LCI)!="try-error"){
         D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
@@ -265,7 +265,7 @@ lci_internal<-function(object, label, est, ptable,
     } else if (optimizer[1]=="nlminb"){
       LCI<-suppressWarnings(try(nlminb(start, fitfunc,fitmodel=object,
                                        label=label, pindx=pindx, crit=crit, bound=bound,
-                                       diff.method=diff.method,chat=chat,control=control)))
+                                       diff.method=diff.method,chat=chat,control=control,...)))
       if(class(LCI)!="try-error"){
         D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
@@ -281,10 +281,10 @@ lci_internal<-function(object, label, est, ptable,
     if(diff.method[1]=="satorra.2000"){
       diff.method<-"default"
     }
-    LCI<-suppressWarnings(lci_bisect(object,label,crit,tol=Dtol*.002,bound=bound,
+    LCI<-suppressWarnings(lci_bisect(object,label,level,crit,tol=Dtol*.002,bound=bound,
                                      diff.method=diff.method,iterlim=iterlim,
-                                     chat=chat,start=start))
     if(class(LCI)!="try-error"){
+                                     chat=chat,start=start,...))
       D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
       attr(D,"mod")<-NULL
       est.bound<-LCI$est
@@ -296,9 +296,9 @@ lci_internal<-function(object, label, est, ptable,
     if(diff.method[1]=="satorra.2000"){
       diff.method<-"default"
     }
-    LCI<-lci_uniroot(object,label,crit,tol=Dtol*.002,bound=bound,
-                                      diff.method=diff.method,iterlim=iterlim,
-                                      chat=chat,start=start)
+    LCI<-suppressWarnings(lci_uniroot(object,label,level,crit,tol=Dtol*.002,bound=bound,
+                                     diff.method=diff.method,iterlim=iterlim,
+                                     chat=chat,start=start,...))
     if(class(LCI)!="try-error" & any(!is.na(LCI))){
       D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
       attr(D,"mod")<-NULL
@@ -374,8 +374,8 @@ lci_nealemiller1997<-function(p, fitmodel, label, pindx, crit, bound=c("lower","
   return(fit)
 }
 
-lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("lower","upper"),
-                     diff.method="default",lb=-Inf,ub=Inf,chat=1,start=NULL){
+lci_bisect<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,init=qnorm((1-level)/2,lower.tail=FALSE),
+                     bound=c("lower","upper"),diff.method="default",lb=-Inf,ub=Inf,chat=1,start=NULL,...){
   ## FIXME: init<1 might break things
   ## FIXME: ub and lb aren't available to user
   ## FIXME: tol and init also not available to user
@@ -526,9 +526,9 @@ lci_bisect<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=2,bound=c("low
   
 }
 
-lci_uniroot<-function(fitmodel,label,crit,tol=1e-5,iterlim=50,init=3,bound=c("lower","upper"),
-                      diff.method="default",chat=1,start=NULL){
-  
+lci_uniroot<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,init=qnorm((1-level)/2,lower.tail=FALSE),
+                     bound=c("lower","upper"),diff.method="default",lb=-Inf,ub=Inf,chat=1,start=NULL,...){
+
   ## extract parameter table
   ptable<-parTable(fitmodel)
   
