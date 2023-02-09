@@ -180,8 +180,8 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
           }
         
           # Call lci_internal via bisection
-                            crit, b, chat, optimizer, "bisect",
           LCI<-lci_internal(fit, label, level, est, ptable, pindx,
+                            crit, b, chat, optimizer, "uniroot",
                             tmpstart,diff.method, Dtol, iterlim, control,...)
         }
       }
