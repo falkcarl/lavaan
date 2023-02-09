@@ -160,8 +160,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
                             newstart,diff.method, Dtol, iterlim, control,...)
         }
       } else if (abs(LCI$D-crit)>Dtol) {
-        warning("Tolerance level for chi-square difference test not met for CI boundary ", b,".
-                  An obtained difference test at the CI boundary might not be close to the desired critical value")
+        warning("Tolerance level for chi-square difference test not met for CI boundary ", b,". An obtained difference test at the CI boundary might not be close to the desired critical value")
         if(reoptimize & ci.method=="NealeMiller1997"){
           warning("Attempting to re-optimize by bisection")
         
@@ -187,7 +186,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
         }
       }
     } else {
-      warning(b, " boundary not found")
+      warning("LCI bound not found", b)
     }
     
     # Save results
@@ -249,6 +248,8 @@ lci_internal<-function(object, label, level, est, ptable,
         conv<-LCI$convergence
       } else{
         est.bound<-NA
+        conv<-NA
+        D<-NA
       }
     } else if (optimizer[1]=="optim"){
       LCI<-suppressWarnings(try(optim(start, fitfunc,fitmodel=object,
@@ -257,10 +258,12 @@ lci_internal<-function(object, label, level, est, ptable,
       if(class(LCI)!="try-error"){
         D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
-        attr(D,"mod")<-NULL          
+        attr(D,"mod")<-NULL
         conv<-LCI$convergence
       } else{
         est.bound<-NA
+        conv<-NA
+        D<-NA
       }
     } else if (optimizer[1]=="nlminb"){
       LCI<-suppressWarnings(try(nlminb(start, fitfunc,fitmodel=object,
@@ -273,6 +276,8 @@ lci_internal<-function(object, label, level, est, ptable,
         conv<-LCI$convergence
       } else{
         est.bound<-NA
+        conv<-NA
+        D<-NA
       }
     } else {
       stop("Unsupported optimizer")
@@ -283,14 +288,16 @@ lci_internal<-function(object, label, level, est, ptable,
     }
     LCI<-suppressWarnings(lci_bisect(object,label,level,crit,tol=Dtol*.002,bound=bound,
                                      diff.method=diff.method,iterlim=iterlim,
-    if(class(LCI)!="try-error"){
                                      chat=chat,start=start,...))
+    if(class(LCI)!="try-error" & any(!is.na(LCI))){
       D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
       attr(D,"mod")<-NULL
       est.bound<-LCI$est
       conv<-LCI$iter
     } else{
       est.bound<-NA
+      conv<-NA
+      D<-NA
     }
   } else if (ci.method[1]=="uniroot"){
     if(diff.method[1]=="satorra.2000"){
