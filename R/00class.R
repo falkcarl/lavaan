@@ -10,6 +10,7 @@ setClass("lavData",
         group="character",         # group variable
         ngroups="integer",         # number of groups
         group.label="character",   # group labels
+        block.label="character",   # block labels
         cluster="character",       # cluster variable(s)
         nlevels="integer",         # number of levels
         level.label="character",   # level labels
@@ -96,6 +97,7 @@ setClass("lavModel",          # MATRIX representation of the sem model
         representation="character",  # stub, until we define more classes
         modprop="list",              # model properties
         meanstructure="logical",
+        correlation="logical",
         categorical="logical",
         multilevel="logical",
         group.w.free="logical",
@@ -110,13 +112,13 @@ setClass("lavModel",          # MATRIX representation of the sem model
         th.idx="list",
 
         nx.free="integer",
-        #nx.unco="integer",
+        nx.unco="integer",
         nx.user="integer",
 
         m.free.idx="list",
         x.free.idx="list",
-        #m.unco.idx="list",
-        #x.unco.idx="list",
+        #m.unco.idx="list", # always the same as m.free.idx
+        x.unco.idx="list",
         m.user.idx="list",
         x.user.idx="list",
         x.def.idx="integer",
@@ -124,6 +126,8 @@ setClass("lavModel",          # MATRIX representation of the sem model
         x.cin.idx="integer",
         x.free.var.idx="integer",
 
+        ceq.simple.only="logical",
+        ceq.simple.K="matrix",
         eq.constraints="logical",
         eq.constraints.K="matrix",
         eq.constraints.k0="numeric",

@@ -58,7 +58,7 @@ Model features (always available):
       \code{FALSE}, the metric of each latent variable is determined by fixing 
       the factor loading of the first indicator to 1.0. If there are multiple
       groups, \code{std.lv = TRUE} and \code{"loadings"} is included in 
-      the \code{group.label} argument, then only the latent variances i
+      the \code{group.equal} argument, then only the latent variances
       of the first group will be fixed to 1.0, while the latent
       variances of other groups are set free.}
     \item{\code{effect.coding}:}{Can be logical or character string. If
@@ -74,6 +74,11 @@ Model features (always available):
      equals zero.
      As a result, the latent mean will be freely estimated and usually 
      equal the average of the means of the involved indicators.}
+    \item{\code{ceq.simple}:}{Logical. If \code{TRUE}, and no other 
+     general (equality or inequality) constraints are used in the model, 
+     simple equality constraints
+     are represented in the parameter table as duplicated free parameters 
+     (instead of extra rows with \code{op = "=="}).}
     \item{\code{parameterization}:}{Currently only used if data is 
       categorical. If \code{"delta"}, the delta parameterization is used. 
       If \code{"theta"}, the theta parameterization is used.}
@@ -299,21 +304,22 @@ Estimation options:
       is requested for the test statistic; in this case bootstrap standard
       errors are computed using model-based bootstrapping).
       If \code{"none"}, no standard errors are computed.}
-   \item{\code{test}:}{If \code{"standard"}, a conventional chi-square test 
-     is computed. If \code{"Satorra.Bentler"}, a Satorra-Bentler scaled test 
-     statistic is computed. If \code{"Yuan.Bentler"}, a Yuan-Bentler scaled 
-     test statistic is computed. If \code{"Yuan.Bentler.Mplus"}, a 
-     test statistic is computed that is asymptotically equal to the
-     Yuan-Bentler scaled
-     test statistic. If \code{"mean.var.adjusted"} or 
-     \code{"Satterthwaite"}, a mean and variance adjusted test statistic is 
-     compute. If \code{"scaled.shifted"}, an alternative mean and variance 
-     adjusted test statistic is computed (as in Mplus version 6 or higher).
-     If \code{"boot"} or \code{"bootstrap"} or \code{"Bollen.Stine"}, the 
-     Bollen-Stine bootstrap is used to compute the bootstrap probability value 
-     of the test statistic. If \code{"default"}, the value depends on the
-     values of other arguments. From version 0.6-5 onwards, the test argument
-     accepts a vector, and therefore multiple tests can be requested.}
+   \item{\code{test}:}{Character vector. See the documentation of
+      the \code{\link{lavTest}} function for a full list. Multiple names
+      of test statistics can be provided. If \code{"default"}, the value 
+      depends on the values of other arguments. See also the 
+      \code{\link{lavTest}} function to extract (alternative)     
+      test statistics from a fitted lavaan object.}
+   \item{code{scaled.test}:}{Character. Choose the test statistic
+    that will be scaled (if a scaled test statistic is requested).
+    The default is \code{"standard"}, but it could also be (for example)
+    \code{"Browne.residual.nt"}.}
+   \item{\code{gamma.n.minus.one}}{Logical. If \code{TRUE}, we divide the
+     Gamma matrix by N-1 (instead of the default N).}
+   \item{\code{gamma.unbiased}}{Logical. If \code{TRUE}, we compute an
+     unbiased version for the Gamma matrix. Only available for single-level
+     complete data and when \code{conditional.x = FALSE} and 
+     \code{fixed.x = FALSE} (for now).}
    \item{\code{bootstrap}:}{Number of bootstrap draws, if bootstrapping is 
      used.}
    \item{\code{do.fit}:}{If \code{FALSE}, the model is not fit, and the 
@@ -386,6 +392,30 @@ Optimization options:
       (default is 0.0).}
 }
 
+Parallelization options (currently only used for bootstrapping):
+
+\describe{
+    \item{parallel}{The type of parallel operation to be used (if any).  If
+      missing, the default is \code{"no"}.  }
+    \item{ncpus}{Integer: number of processes to be used in parallel operation:
+      typically one would chose this to the number of available CPUs. By
+      By default this is the number of cores (as detected by 
+      \code{parallel::detectCores()}) minus one.}
+    \item{cl}{An optional \pkg{parallel} or \pkg{snow} cluster for use if
+      \code{parallel = "snow"}. If not supplied, a cluster on the local 
+      machine is created for the duration of the \code{bootstrapLavaan} 
+      or \code{bootstrapLRT} call.}
+    \item{iseed}{An integer to set the seed. Or NULL if no reproducible 
+      results are needed. This works for both serial (non-parallel) and 
+      parallel settings. Internally, \code{RNGkind()} is set to 
+      \code{"L'Ecuyer-CMRG"} if \code{parallel = "multicore"}. If 
+      \code{parallel = "snow"} (under windows), 
+      \code{parallel::clusterSetRNGStream()} is called which automatically 
+      switches to \code{"L'Ecuyer-CMRG"}. When \code{iseed} is not
+      NULL, \code{.Random.seed} (if it exists) in the global environment is
+      left untouched.}
+}
+
 Categorical estimation options:
 
 \describe{
@@ -443,7 +473,7 @@ Check options:
       they should be (the tolerance used is 0.001).}
     \item{\code{check.post}:}{Logical. If \code{TRUE}, and the model
       converged, a check is performed after (post) fitting, to verify if 
-      the solution is admissable. This implies that all variances are
+      the solution is admissible. This implies that all variances are
       non-negative, and all the model-implied covariance matrices are 
       positive (semi-)definite. For the latter test, we tolerate a tiny 
       negative eigenvalue that is smaller than .Machine$double.eps^(3/4), 

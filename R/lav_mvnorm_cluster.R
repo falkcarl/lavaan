@@ -57,6 +57,7 @@ lav_mvnorm_cluster_implied22l <- function(Lp           = NULL,
     Mu.B.tilde <- numeric( p.tilde )
     Mu.B.tilde[ ov.idx[[2]] ] <- Mu.B
 
+
     # add Mu.W[within.idx] to Mu.B
     Mu.WB.tilde <- numeric( p.tilde )
     Mu.WB.tilde[ within.idx ] <- Mu.W.tilde[ within.idx ]
@@ -314,7 +315,7 @@ lav_mvnorm_cluster_loglik_samplestats_2l <- function(YLp          = NULL,
 }
 
 
-# first derivate -2*logl wrt Mu.W, Mu.B, Sigma.W, Sigma.B
+# first derivative -2*logl wrt Mu.W, Mu.B, Sigma.W, Sigma.B
 lav_mvnorm_cluster_dlogl_2l_samplestats <- function(YLp          = NULL,
                                                     Lp           = NULL,
                                                     Mu.W         = NULL,

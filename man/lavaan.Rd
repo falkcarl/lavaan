@@ -8,8 +8,8 @@ lavaan(model = NULL, data = NULL, ordered = NULL,
        sampling.weights   = NULL,
        sample.cov = NULL, sample.mean = NULL, sample.th = NULL,
        sample.nobs = NULL,
-       group = NULL, cluster = NULL,
-       constraints = "", WLS.V = NULL, NACOV = NULL,
+       group = NULL, cluster = NULL, constraints = "", 
+       WLS.V = NULL, NACOV = NULL, ov.order = "model",
        slotOptions = NULL, slotParTable = NULL, slotSampleStats = NULL,
        slotData = NULL, slotModel = NULL, slotCache = NULL,
        sloth1 = NULL,
@@ -72,6 +72,13 @@ in a multiple group analysis.}
     For a multiple group analysis, a list with an asymptotic
     variance-covariance matrix for each group. See the \code{WLS.V}
     argument for information about the order of the elements.}
+\item{ov.order}{Character. If \code{"model"} (the default), the order of
+    the observed variable names (as reflected for example in the output of
+    \code{lavNames()}) is determined by the model syntax. If
+    \code{"data"}, the order is determined by the data (either the full
+    data.frame or the sample (co)variance matrix). If the \code{WLS.V} 
+    and/or \code{NACOV} matrices are provided, this argument is currently 
+    set to \code{"data"}.}
 \item{slotOptions}{Options slot from a fitted lavaan object. If provided,
     no new Options slot will be created by this call.}
 \item{slotParTable}{ParTable slot from a fitted lavaan object. If provided,
@@ -95,8 +102,8 @@ in a multiple group analysis.}
 }
 \references{
 Yves Rosseel (2012). lavaan: An R Package for Structural Equation
-Modeling. Journal of Statistical Software, 48(2), 1-36. URL
-http://www.jstatsoft.org/v48/i02/.}
+Modeling. Journal of Statistical Software, 48(2), 1-36. 
+\doi{https://doi.org/10.18637/jss.v048.i02}}
 \seealso{
 \code{\link{cfa}}, \code{\link{sem}}, \code{\link{growth}}
 }

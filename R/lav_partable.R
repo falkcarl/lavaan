@@ -26,11 +26,13 @@ lavaanify <- lavParTable <- function(
                       orthogonal.x     = FALSE,
                       orthogonal.efa   = FALSE,
                       std.lv           = FALSE,
+                      correlation      = FALSE,
                       effect.coding    = "",
                       conditional.x    = FALSE,
                       fixed.x          = FALSE,
                       parameterization = "delta",
                       constraints      = NULL,
+                      ceq.simple       = FALSE,
 
                       auto             = FALSE,
                       model.type       = "sem",
@@ -45,6 +47,7 @@ lavaanify <- lavParTable <- function(
 
                       varTable         = NULL,
                       ngroups          = 1L,
+                      nthresholds      = NULL,
                       group.equal      = NULL,
                       group.partial    = NULL,
                       group.w.free     = FALSE,
@@ -72,11 +75,30 @@ lavaanify <- lavParTable <- function(
     # user-specified *constraints* are returned as an attribute
     CON  <- attr(FLAT, "constraints"); attr(FLAT, "constraints") <- NULL
 
+    # ov.names.data?
+    ov.names.data <- NULL
+    if(any(FLAT$op == "da")) {
+        da.idx <- which(FLAT$op == "da")
+        ov.names.data <- FLAT$lhs[da.idx]
+    }
+
     # extra constraints?
     if(!is.null(constraints) && any(nchar(constraints) > 0L)) {
         FLAT2 <- lavParseModelString(model.syntax=constraints, warn=warn)
         CON2 <- attr(FLAT2, "constraints"); rm(FLAT2)
         CON <- c(CON, CON2)
+    }
+    if(length(CON) > 0L) {
+        # add 'user' column
+        CON <- lapply(CON, function(x) {x$user <- 1L; x} )
+        # any explicit (in)equality constraints? (ignoring := definitions)
+        CON.nondef.flag <- ( sum(sapply(CON, "[[", "op")
+                                 %in% c("==", "<", ">")) > 0L )
+        # any explicit equality constraints?
+        CON.eq.flag <- ( sum(sapply(CON, "[[", "op") == "==") > 0L )
+        if(CON.nondef.flag) {
+            ceq.simple <- FALSE
+        }
     }
 
     if(debug) {
@@ -90,6 +112,9 @@ lavaanify <- lavParTable <- function(
 
     # bogus varTable? (if data.type == "none")
     if(!is.null(varTable)) {
+        if(!is.list(varTable) || is.null(varTable$name)) {
+            stop("lavaan ERROR: varTable is not a list or does not contain variable names.")
+        }
         if(all(varTable$nobs == 0)) {
             varTable <- NULL
         }
@@ -139,13 +164,26 @@ lavaanify <- lavParTable <- function(
 
     # check for block identifiers in the syntax (op = ":")
     n.block.flat <- length(which(FLAT$op == ":"))
+    # this is NOT the number of blocks (eg group 1: level 1: -> 1 block)
 
     # for each non-empty `block' in n.block.flat, produce a USER
     if(n.block.flat > 0L) {
 
+        # make sure FLAT is a data.frame
+        FLAT <- as.data.frame(FLAT, stringsAsFactors = FALSE)
+
         # what are the block lhs labels?
-        BLOCKS <- tolower(FLAT$lhs[FLAT$op == ":"])
-        BLOCK.lhs <- unique(BLOCKS)
+        BLOCKS.lhs.all <- tolower(FLAT$lhs[FLAT$op == ":"])
+        BLOCK.lhs <- unique(BLOCKS.lhs.all)
+
+        # if we have group and level, check that group comes first!
+        if("group" %in% BLOCK.lhs && "level" %in% BLOCK.lhs) {
+            group.idx <- which(BLOCK.lhs == "group")
+            level.idx <- which(BLOCK.lhs == "level")
+            if(group.idx > level.idx) {
+                stop("lavaan ERROR: levels must be nested within groups (not the other way around).")
+            }
+        }
 
         # block op == ":" indices
         BLOCK.op.idx <- which(FLAT$op == ":")
@@ -165,7 +203,7 @@ lavaanify <- lavParTable <- function(
                  "missing numbers/labels:\n\t\t", txt)
         }
 
-        # check for 'group' (needed?)
+        # check for ngroups (ngroups is based on the data!)
         if("group" %in% BLOCK.lhs) {
             # how many group blocks?
             group.block.idx <- FLAT$op == ":" & FLAT$lhs == "group"
@@ -177,28 +215,65 @@ lavaanify <- lavParTable <- function(
             }
         }
 
-        # split the FLAT data.frame per `block', create LIST
-        # for each `block', and rbind them together, adding block columns
-        FLAT <- as.data.frame(FLAT, stringsAsFactors = FALSE)
-        BLOCK.op.idx <- c(BLOCK.op.idx, nrow(FLAT) + 1L)
+        # figure out how many 'blocks' we have, and store indices/block.labels
         BLOCK.rhs <- rep("0", length(BLOCK.lhs))
         block.id <- 0L
+        BLOCK.INFO <- vector("list", length = n.block.flat) # too large
+        BLOCK.op.idx1 <- c(BLOCK.op.idx, nrow(FLAT) + 1L) # add addition row
+        for(block.op in seq_len(n.block.flat)) {
 
-        for(block in seq_len(n.block.flat)) {
-
-            # fill BLOC.rhs value
-            block.lhs <- FLAT$lhs[BLOCK.op.idx[block]]
-            block.rhs <- FLAT$rhs[BLOCK.op.idx[block]]
+            # fill BLOCK.rhs value(s)
+            block.lhs <- FLAT$lhs[BLOCK.op.idx1[block.op]]
+            block.rhs <- FLAT$rhs[BLOCK.op.idx1[block.op]]
             BLOCK.rhs[ which(block.lhs == BLOCK.lhs) ] <- block.rhs
 
             # another block identifier?
-            if(BLOCK.op.idx[block+1] - BLOCK.op.idx[block] == 1L) {
+            if(BLOCK.op.idx1[block.op + 1L] - BLOCK.op.idx1[block.op] == 1L) {
                 next
             }
+
+            # we have a 'block'
             block.id <- block.id + 1L
 
+            # select FLAT rows for this block
+            IDX <- (BLOCK.op.idx1[block.op]+1L):(BLOCK.op.idx1[block.op+1L]-1L)
 
-            FLAT.block <- FLAT[(BLOCK.op.idx[block]+1L):(BLOCK.op.idx[block+1]-1L),]
+            # store info in BLOCK.INFO
+            BLOCK.INFO[[block.id]] <- list(lhs = BLOCK.lhs, # always the same
+                                           rhs = BLOCK.rhs, # for this block
+                                           idx = IDX)
+        }
+        BLOCK.INFO <- BLOCK.INFO[seq_len(block.id)]
+
+        # new in 0.6-12
+        # check for blocks with the same BLOCK.rhs combination
+        # (perhaps added later?)
+        # - merge the indices
+        # - remove the duplicated blocks
+        block.labels <- sapply(lapply(BLOCK.INFO, "[[", "rhs"),
+                               paste, collapse = ".")
+        nblocks <- length(unique(block.labels))
+        if(nblocks < length(block.labels)) {
+            # it would appear we have duplicated block.labels -> merge
+            dup.idx <- which(duplicated(block.labels))
+            for(i in 1:length(dup.idx)) {
+                this.dup.idx <- dup.idx[i]
+                orig.idx <- which(block.labels == block.labels[this.dup.idx])[1]
+                BLOCK.INFO[[orig.idx]]$idx <- c(BLOCK.INFO[[orig.idx    ]]$idx,
+                                                BLOCK.INFO[[this.dup.idx]]$idx)
+            }
+            BLOCK.INFO <- BLOCK.INFO[-dup.idx]
+        }
+
+        # split the FLAT data.frame per `block', create LIST
+        # for each `block', and rbind them together, adding block columns
+        for(block in seq_len(nblocks)) {
+
+            BLOCK.rhs <- BLOCK.INFO[[block]]$rhs
+            block.lhs <- BLOCK.INFO[[block]]$lhs[ length(BLOCK.lhs) ] # last one
+            block.idx <- BLOCK.INFO[[block]]$idx
+
+            FLAT.block <- FLAT[block.idx, ]
             # rm 'block' column (if any) in FLAT.block
             FLAT.block$block <- NULL
 
@@ -246,13 +321,37 @@ lavaanify <- lavParTable <- function(
                 ov.names.x.block <- NULL
             }
 
+            # new in 0.6-12: if multilevel and conditional.x, make sure
+            # that 'splitted' exogenous covariates become 'y' variables
+            if(conditional.x && block.lhs == "level") {
+                if(ngroups == 1L) {
+                    OTHER.BLOCK.NAMES <- lav_partable_vnames(FLAT, "ov",
+                                        block = seq_len(nblocks)[-block])
+                } else {
+                    # TEST ME
+                    this.group <- ceiling(block / nlevels)
+                    blocks.within.group <- (this.group - 1L) * nlevels + seq_len(nlevels)
+                    OTHER.BLOCK.NAMES <- lav_partable_vnames(FLAT, "ov",
+                                        block = blocks.within.group[-block])
+                }
+                ov.names.x.block <- lav_partable_vnames(FLAT.block, "ov.x")
+                if(length(ov.names.x.block) > 0L) {
+                    idx <- which(ov.names.x.block %in% OTHER.BLOCK.NAMES)
+                    if(length(idx) > 0L) {
+                        ov.names.x.block <- ov.names.x.block[-idx]
+                    }
+                }
+            } else {
+                ov.names.x.block <- NULL
+            }
+
             LIST.block <- lav_partable_flat(FLAT.block, blocks = BLOCK.lhs,
-                block.id = block.id,
+                block.id = block,
                 meanstructure = meanstructure,
                 int.ov.free = int.ov.free, int.lv.free = int.lv.free,
                 orthogonal = orthogonal, orthogonal.y = orthogonal.y,
                 orthogonal.x = orthogonal.x, orthogonal.efa = orthogonal.efa,
-                std.lv = std.lv,
+                std.lv = std.lv, correlation = correlation,
                 conditional.x = conditional.x, fixed.x = fixed.x,
                 parameterization = parameterization,
                 auto.fix.first = auto.fix.first,
@@ -262,6 +361,7 @@ lavaanify <- lavParTable <- function(
                 auto.delta = auto.delta, auto.efa = auto.efa,
                 varTable = varTable, group.equal = NULL,
                 group.w.free = group.w.free, ngroups = 1L,
+                nthresholds = nthresholds,
                 ov.names.x.block = ov.names.x.block)
             LIST.block <- as.data.frame(LIST.block, stringsAsFactors = FALSE)
 
@@ -298,7 +398,7 @@ lavaanify <- lavParTable <- function(
             int.ov.free = int.ov.free, int.lv.free = int.lv.free,
             orthogonal = orthogonal, orthogonal.y = orthogonal.y,
             orthogonal.x = orthogonal.x, orthogonal.efa = orthogonal.efa,
-            std.lv = std.lv,
+            std.lv = std.lv, correlation = correlation,
             conditional.x = conditional.x, fixed.x = fixed.x,
             parameterization = parameterization,
             auto.fix.first = auto.fix.first, auto.fix.single = auto.fix.single,
@@ -307,7 +407,7 @@ lavaanify <- lavParTable <- function(
             auto.delta = auto.delta, auto.efa = auto.efa,
             varTable = varTable, group.equal = group.equal,
             group.w.free = group.w.free,
-            ngroups = ngroups)
+            ngroups = ngroups, nthresholds = nthresholds)
     }
     if(debug) {
         cat("[lavaan DEBUG]: parameter LIST without MODIFIERS:\n")
@@ -551,229 +651,115 @@ lavaanify <- lavParTable <- function(
     #       are constrained to be equal to the factor-loadings of the first
     #       set, no further constraints are needed
     if(auto.efa && !is.null(LIST$efa)) {
-        # for each set, for each block
-        nblocks <- lav_partable_nblocks(LIST)
-        set.names <- lav_partable_efa_values(LIST)
-        nsets <- length(set.names)
-
-        for(b in seq_len(nblocks)) {
-            for(s in seq_len(nsets)) {
-                # lv's for this block/set
-                lv.nam.efa <- unique(LIST$lhs[LIST$op == "=~" &
-                                              LIST$block == b &
-                                              LIST$efa == set.names[s]])
-                if(length(lv.nam.efa) == 1L) {
-                    # nothing to do (warn?)
-                    next
-                }
-
-                # equality constraints on ALL factor loadings in this set?
-                # two scenario's:
-                # 1. eq constraints within the same block, perhaps time1/time2/
-                # 2. eq constraints across groups (group.equal = "loadings")
-                # --> no constraints are needed
-
-                # store labels (if any)
-                fix.to.zero <- TRUE
-
-                # 1. within block/group
-                if(s == 1L) {
-                    set.idx <- which(LIST$op == "=~" &
-                                     LIST$block == b &
-                                     LIST$lhs %in% lv.nam.efa)
-                    LABEL.set1 <- LIST$label[set.idx]
-                } else {
-                    # collect plabels for this set, if any
-                    set.idx <- which(LIST$op == "=~" &
-                                     LIST$block == b &
-                                     LIST$lhs %in% lv.nam.efa)
-
-                    # user-provided labels (if any)
-                    this.label.set <- LIST$label[set.idx]
-
-                    # same as in reference set?
-                    if(all(nchar(this.label.set) > 0L) &&
-                       all(this.label.set %in% LABEL.set1)) {
-                        fix.to.zero <- FALSE
-                    }
-                }
-
-                # 2. across groups
-                if(b == 1L) {
-                    set.idx <- which(LIST$op == "=~" &
-                                     LIST$block == b &
-                                     LIST$lhs %in% lv.nam.efa)
-                    LABEL.group1 <- LIST$label[set.idx]
-                } else {
-                    if("loadings" %in% group.equal) {
-                       fix.to.zero <- FALSE
-                    } else {
-                        # collect labels for this set, if any
-                        set.idx <- which(LIST$op == "=~" &
-                                         LIST$block == b &
-                                         LIST$lhs %in% lv.nam.efa)
-
-                        # user-provided labels (if any)
-                        this.label.set <- LIST$label[set.idx]
-
-                        # same as in reference set?
-                        if(all(nchar(this.label.set) > 0L) &&
-                           all(this.label.set %in% LABEL.group1)) {
-                            fix.to.zero <- FALSE
-                        }
-                    }
-                }
-
-                # 1. echelon pattern
-                nfac <- length(lv.nam.efa)
-                for(f in seq_len(nfac)) {
-                    if(f == 1L) {
-                        next
-                    }
-                    nzero <- (f - 1L)
-                    ind.idx <- which(LIST$op == "=~" &
-                                     LIST$block == b &
-                                     LIST$lhs %in% lv.nam.efa[f])
-                    if(length(ind.idx) < nzero) {
-                        stop("lavaan ERROR: efa factor ", lv.nam.efa[f],
-                             " has not enough indicators for echelon pattern")
-                    }
-
-                    # fix to zero
-                    if(fix.to.zero) {
-                        LIST$free[  ind.idx[seq_len(nzero)]] <- 0L
-                        LIST$ustart[ind.idx[seq_len(nzero)]] <- 0
-                        LIST$user[  ind.idx[seq_len(nzero)]] <- 7L
-                    } else {
-                        LIST$user[  ind.idx[seq_len(nzero)]] <- 77L
-                    }
-                }
-
-                # 2. covariances constrained to zero (only if oblique rotation)
-                if(!orthogonal.efa) {
-                    # skip if user == 1 (user-override!)
-                    cov.idx <- which(LIST$op == "~~" &
-                                     LIST$block == b &
-                                     LIST$user == 0L &
-                                     LIST$lhs %in% lv.nam.efa &
-                                     LIST$rhs %in% lv.nam.efa &
-                                     LIST$lhs != LIST$rhs)
-
-                    # fix to zero
-                    if(fix.to.zero) {
-                        LIST$free[  cov.idx] <- 0L
-                        LIST$ustart[cov.idx] <- 0
-                        LIST$user[  cov.idx] <- 7L
-                    } else {
-                        LIST$user[  cov.idx] <- 77L
-                    }
-                }
-
-            } # sets
-        } # blocks
+        LIST <- lav_partable_efa_constraints(LIST = LIST,
+                                             orthogonal.efa = orthogonal.efa,
+                                             group.equal = group.equal)
     } # auto.efa
 
     # handle user-specified equality constraints
-    # lavaan 0.5-18
-    # - rewrite 'LABEL-based' equality constraints as == constraints
-    # - create plabel: internal labels, based on id
-    # - create CON entries, using these internal labels
+    # lavaan 0.6-11:
+    #     two settings:
+    #       1) simple equality constraints ONLY -> back to basics: only
+    #          duplicate 'free' numbers; no longer explicit == rows with plabels
+    #       2) mixture of simple and other (explicit) constraints
+    #          treat them together as we did in <0.6-11
     LIST$plabel <- paste(".p", LIST$id, ".", sep="")
-    idx.eq.label <- which(duplicated(LABEL))
-    if(length(idx.eq.label) > 0L) {
+    eq.LABELS <- unique(LABEL[duplicated(LABEL)])
+    eq.id <- integer( length(LIST$lhs) )
+    for(eq.label in eq.LABELS) {
         CON.idx <- length(CON)
-        # add 'user' column
-        CON <- lapply(CON, function(x) {x$user <- 1L; x} )
-        for(idx in idx.eq.label) {
-            eq.label <- LABEL[idx]
-            all.idx <- which(LABEL == eq.label) # all same-label parameters
-            ref.idx <- all.idx[1L]              # the first one only
+        all.idx <- which(LABEL == eq.label) # all same-label parameters
+        ref.idx <- all.idx[1L]              # the first one only
+        other.idx <- all.idx[-1L]           # the others
+        eq.id[all.idx] <- ref.idx
 
-            # new in 0.6-6: make sure lower/upper constraints are equal too
-            if(!is.null(LIST$lower) &&
-               length(unique(LIST$lower[all.idx])) > 0L) {
-                non.inf <- which(is.finite(LIST$lower[all.idx]))
-                if(length(non.inf) > 0L) {
-                    smallest.val <- min(LIST$lower[all.idx][non.inf])
-                    LIST$lower[all.idx] <- smallest.val
-                }
+        # new in 0.6-6: make sure lower/upper constraints are equal too
+        if(!is.null(LIST$lower) && length(unique(LIST$lower[all.idx])) > 0L) {
+            non.inf <- which(is.finite(LIST$lower[all.idx]))
+            if(length(non.inf) > 0L) {
+                smallest.val <- min(LIST$lower[all.idx][non.inf])
+                LIST$lower[all.idx] <- smallest.val
             }
-            if(!is.null(LIST$upper) &&
-                length(unique(LIST$upper[all.idx])) > 0L) {
-                non.inf <- which(is.finite(LIST$upper[all.idx]))
-                if(length(non.inf) > 0L) {
-                    largest.val <- max(LIST$upper[all.idx][non.inf])
-                    LIST$upper[all.idx] <- largest.val
-                }
+        }
+        if(!is.null(LIST$upper) && length(unique(LIST$upper[all.idx])) > 0L) {
+            non.inf <- which(is.finite(LIST$upper[all.idx]))
+            if(length(non.inf) > 0L) {
+                largest.val <- max(LIST$upper[all.idx][non.inf])
+                LIST$upper[all.idx] <- largest.val
+            }
+        }
+
+        # two possibilities:
+        #   1. all.idx contains a fixed parameter: in this case,
+        #      we fix them all (hopefully to the same value)
+        #   2. all.idx contains only free parameters
+
+        # 1. all.idx contains a fixed parameter
+        if(any(LIST$free[all.idx] == 0L)) {
+
+            # which one is fixed?
+            fixed.all <- all.idx[ LIST$free[all.idx] == 0L ]
+            # only pick the first
+            fixed.idx <- fixed.all[1]
+
+            # sanity check: are all ustart values equal?
+            ustart1 <- LIST$ustart[ fixed.idx ]
+            if(! all(ustart1 == LIST$ustart[fixed.all]) ) {
+                warning("lavaan WARNING: equality constraints involve fixed parameters with different values; only the first one will be used")
             }
 
-            # two possibilities:
-            # 1. all.idx contains a fixed parameter: in this case,
-            #    we fix them all (hopefully to the same value)
-            # 2. all.idx contains only free parameters
+            # make them all fixed
+            LIST$ustart[all.idx] <- LIST$ustart[fixed.idx]
+            LIST$free[  all.idx] <- 0L  # not free anymore, since it must
+                                        # be equal to the 'fixed' parameter
+                                        # (Note: Mplus ignores this)
+            eq.id[all.idx]       <- 0L  # remove from eq.id list
 
-            # 1. fixed?
-            if(any(LIST$free[all.idx] == 0L)) {
-
-                # which one is fixed? (only pick the first!)
-                fixed.all <- all.idx[ LIST$free[all.idx] == 0L ]
-                fixed.idx <- fixed.all[1] # only pick the first!
-
-                # sanity check: are all ustart values equal?
-                ustart1 <- LIST$ustart[ fixed.idx ]
-                if(! all(ustart1 == LIST$ustart[fixed.all]) ) {
-                    warning("lavaan WARNING: equality constraints involve fixed parameters with different values; only the first one will be used")
-                }
-
-
-                fixed.idx <- fixed.all[1] # only pick the first!
-
-                # fix current 'idx'
-                LIST$ustart[idx] <- LIST$ustart[fixed.idx]
-                LIST$free[idx] <- 0L  # not free anymore, since it must
-                                      # be equal to the 'fixed' parameter
-                                      # (Note: Mplus ignores this)
-
-                # just in case: if ref.idx is not equal to fixed.idx,
-                # fix this one too
-                LIST$ustart[ref.idx] <- LIST$ustart[fixed.idx]
-                LIST$free[ref.idx] <- 0L
-
-                # new in 0.6-8 (for efa + user-specified eq constraints)
-                if(LIST$user[idx] %in% c(7L, 77L)) {
-                    # if involved in an efa block, store in CON anyway
-                    # we may need it for the rotated solution
+            # new in 0.6-8 (for efa + user-specified eq constraints)
+            if(any(LIST$user[all.idx] %in% c(7L, 77L))) {
+                # if involved in an efa block, store in CON anyway
+                # we may need it for the rotated solution
+                for(o in other.idx) {
                     CON.idx <- CON.idx + 1L
                     CON[[CON.idx]] <- list(op   = "==",
                                            lhs  = LIST$plabel[ref.idx],
-                                           rhs  = LIST$plabel[idx],
+                                           rhs  = LIST$plabel[o],
                                            user = 2L)
                 }
+            }
 
+        } else {
+        # 2. all.idx contains only free parameters
+            # old system:
+            # - add CON entry
+            # - in 0.6-11: only if CON is not empty
+            if(!ceq.simple) {
+                for(o in other.idx) {
+                    CON.idx <- CON.idx + 1L
+                    CON[[CON.idx]] <- list(op   = "==",
+                                           lhs  = LIST$plabel[ref.idx],
+                                           rhs  = LIST$plabel[o],
+                                           user = 2L)
+                }
             } else {
-            # 2. ref.idx is a free parameter
-                # user-label?
-                #if(any(nchar(LIST$label[ref.idx])  > 0)) {
-                #    lhs.lab <- LIST$label[ref.idx]
-                #} else {
-                #    lhs.lab <- PLABEL[ref.idx]
-                #}
-                CON.idx <- CON.idx + 1L
-                CON[[CON.idx]] <- list(op   = "==",
-                                       lhs  = LIST$plabel[ref.idx],
-                                       rhs  = LIST$plabel[idx],
-                                       user = 2L)
+            # new system:
+            # - set $free elements to zero, and later to ref id
+                LIST$free[other.idx] <- 0L # all but the first are non-free
+                                           # but will get a duplicated number
+            }
 
-                # just to trick semTools, also add something in the label
-                # colum, *if* it is empty
-                for(i in all.idx) {
-                    if(nchar(LIST$label[i]) == 0L) {
-                        LIST$label[i] <- LIST$plabel[ ref.idx ]
-                    }
+            # just to trick semTools, also add something in the label
+            # colum, *if* it is empty
+            # update: 0.6-11 we keep this, because it shows the plabels
+            #         when eg group.equal = "loadings"
+            for(i in all.idx) {
+                if(nchar(LIST$label[i]) == 0L) {
+                    LIST$label[i] <- LIST$plabel[ ref.idx ]
                 }
             }
-        }
-    }
+        } # all free
+
+    } # eq in eq.labels
     if(debug) {
         print(CON)
     }
@@ -1065,11 +1051,38 @@ lavaanify <- lavParTable <- function(
 
 
     # count free parameters
-    idx.free <- which(LIST$free > 0)
+    idx.free <- which(LIST$free > 0L)
     LIST$free[idx.free] <- seq_along(idx.free)
+
+    # new in 0.6-11: add free counter to this element (as in < 0.5-18)
+    # unless we have other constraints
+    if(ceq.simple) {
+        idx.equal <- which(eq.id > 0)
+        LIST$free[idx.equal] <- LIST$free[ eq.id[idx.equal] ]
+    }
+
+    # new in 0.6-14: add 'da' entries to reflect data-based order of ov's
+    if(!is.null(ov.names.data)) {
+        TMP <- list(lhs = ov.names.data,
+                     op = rep("da", length(ov.names.data)),
+                    rhs = ov.names.data,
+                    user  = rep(0L, length(ov.names.data)),
+                    block = rep(0L, length(ov.names.data)))
+        if(!is.null(LIST$group)) {
+            TMP$group <- rep(0L, length(ov.names.data))
+        }
+        if(!is.null(LIST$level)) {
+            TMP$level <- rep(0L, length(ov.names.data))
+        }
+        if(!is.null(LIST$class)) {
+            TMP$class <- rep(0L, length(ov.names.data))
+        }
+        LIST <- lav_partable_merge(LIST, TMP)
+    }
+
     # backwards compatibility...
     if(!is.null(LIST$unco)) {
-         LIST$unco[idx.free] <- seq_along(idx.free)
+         LIST$unco[idx.free] <- seq_along(sum(LIST$free > 0L))
     }
 
     if(debug) {

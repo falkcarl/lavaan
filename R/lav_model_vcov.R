@@ -29,14 +29,37 @@ lav_model_nvcov_bootstrap <- function(lavmodel       = NULL,
                                    lavdata.        = lavdata,
                                    R               = R,
                                    verbose         = lavoptions$verbose,
+                                   check.post      = lavoptions$check.post,
                                    type            = boot.type,
                                    FUN  = ifelse(boot.type == "bollen.stine",
-                                              "coeftest", "coef"),
-                                   warn            = -1L)
+                                              "coeftest", "coef"))
+                                   #warn            = -1L)
+    COEF.orig <- COEF
+
+    # new in 0.6-12: always warn for failed and nonadmissible
+    error.idx <- attr(COEF, "error.idx")
+    nfailed <- length(error.idx) # zero if NULL
+    if(nfailed > 0L && lavoptions$warn) {
+        warning("lavaan WARNING: ", nfailed,
+                " bootstrap runs failed or did not converge.")
+    }
+
+    notok <- length(attr(COEF, "nonadmissible")) # zero if NULL
+    if(notok > 0L && lavoptions$warn) {
+        warning("lavaan WARNING: ", notok,
+                " bootstrap runs resulted in nonadmissible solutions.")
+    }
+
+    if(length(error.idx) > 0L) {
+        # new in 0.6-13: we must still remove them!
+        COEF <- COEF[-error.idx,,drop = FALSE]
+        # this also drops the attributes
+    }
+
     if(boot.type == "bollen.stine") {
         nc <- ncol(COEF)
         TEST <- COEF[,nc]
-        COEF <- COEF[,-nc]
+        COEF <- COEF[,-nc,drop = FALSE]
     }
 
     # FIXME: cov rescale? Yes for now
@@ -44,7 +67,7 @@ lav_model_nvcov_bootstrap <- function(lavmodel       = NULL,
     NVarCov <- lavsamplestats@ntotal * (cov(COEF) * (nboot-1)/nboot )
 
     # save COEF and TEST (if any)
-    attr(NVarCov, "BOOT.COEF") <- COEF
+    attr(NVarCov, "BOOT.COEF") <- COEF.orig # including attributes
     attr(NVarCov, "BOOT.TEST") <- TEST
 
     NVarCov
@@ -144,7 +167,8 @@ lav_model_nvcov_robust_sem <- function(lavmodel       = NULL,
 
     if( (lavoptions$information[1] == lavoptions$information[2]) &&
         (lavoptions$h1.information[1] == lavoptions$h1.information[2]) &&
-        (lavoptions$observed.information[1] ==
+        (lavoptions$information[2] == "expected" ||
+         lavoptions$observed.information[1] ==
          lavoptions$observed.information[2]) ) {
         # only when same type of information is used # new in 0.6-6
         attr(NVarCov, "E.inv") <- E.inv
@@ -187,7 +211,7 @@ lav_model_nvcov_robust_sandwich <- function(lavmodel       = NULL,
 
     # new in 0.6-6, check for h1.information.meat
     lavoptions2 <- lavoptions
-    if(!is.null(lavoptions$h1.information.meat)) {
+    if(!is.null(lavoptions$information.meat)) {
         lavoptions2$information <- lavoptions$information.meat
     }
     if(!is.null(lavoptions$h1.information.meat)) {
@@ -216,7 +240,8 @@ lav_model_nvcov_robust_sandwich <- function(lavmodel       = NULL,
 
     if( (lavoptions$information[1] == lavoptions$information[2]) &&
         (lavoptions$h1.information[1] == lavoptions$h1.information[2]) &&
-        (lavoptions$observed.information[1] ==
+        (lavoptions$information[2] == "expected" ||
+         lavoptions$observed.information[1] ==
          lavoptions$observed.information[2]) ) {
         # only when same type of information is used # new in 0.6-6
         attr(NVarCov, "E.inv") <- E.inv
@@ -370,7 +395,8 @@ lav_model_nvcov_two_stage <- function(lavmodel       = NULL,
     attr(NVarCov, "Gamma") <- Gamma
     if( (lavoptions$information[1] == lavoptions$information[2]) &&
         (lavoptions$h1.information[1] == lavoptions$h1.information[2]) &&
-        (lavoptions$observed.information[1] ==
+        (lavoptions$information[2] == "expected" ||
+         lavoptions$observed.information[1] ==
          lavoptions$observed.information[2]) ) {
         # only when same type of information is used # new in 0.6-6
         attr(NVarCov, "E.inv") <- E.inv
@@ -508,7 +534,9 @@ lav_model_vcov <- function(lavmodel       = NULL,
 
         # check if VarCov is pd -- new in 0.6-2
         # mostly important if we have (in)equality constraints (MASS::ginv!)
-        if(!is.null(lavoptions$check.vcov) && lavoptions$check.vcov) {
+        if(.hasSlot(lavmodel, "ceq.simple.only") && lavmodel@ceq.simple.only) {
+            # do nothing
+        } else if(!is.null(lavoptions$check.vcov) && lavoptions$check.vcov) {
             eigvals <- eigen(VarCov, symmetric = TRUE,
                              only.values = TRUE)$values
             # correct for (in)equality constraints
@@ -599,7 +627,13 @@ lav_model_vcov_se <- function(lavmodel, lavpartable, VCOV = NULL,
         # check for negative values (what to do: NA or 0.0?)
         x.var[x.var < 0] <- as.numeric(NA)
         x.se <- sqrt( x.var )
-        GLIST <- lav_model_x2GLIST(lavmodel = lavmodel, x = x.se, type = "free")
+        if(.hasSlot(lavmodel, "ceq.simple.only") && lavmodel@ceq.simple.only) {
+            GLIST <- lav_model_x2GLIST(lavmodel = lavmodel, x = x.se,
+                                       type = "unco")
+        } else {
+            GLIST <- lav_model_x2GLIST(lavmodel = lavmodel, x = x.se,
+                                       type = "free")
+        }
 
         # se for full parameter table, but with 0.0 entries for def/ceq/cin
         # elements
@@ -621,14 +655,18 @@ lav_model_vcov_se <- function(lavmodel, lavpartable, VCOV = NULL,
                 } else {
                     BOOT.def <- t(BOOT.def)
                 }
-                def.cov <- cov(BOOT.def )
+                def.cov <- cov(BOOT.def)
             } else {
                 # regular delta method
                 x <- lav_model_get_parameters(lavmodel = lavmodel, type = "free")
-                 JAC <- try(lav_func_jacobian_complex(func = lavmodel@def.function, x = x),
+                JAC <- try(lav_func_jacobian_complex(func = lavmodel@def.function, x = x),
                            silent=TRUE)
                 if(inherits(JAC, "try-error")) { # eg. pnorm()
                     JAC <- lav_func_jacobian_simple(func = lavmodel@def.function, x = x)
+                }
+                if(.hasSlot(lavmodel, "ceq.simple.only") &&
+                   lavmodel@ceq.simple.only) {
+                    JAC <- JAC %*% t(lavmodel@ceq.simple.K)
                 }
                 def.cov <- JAC %*% VCOV %*% t(JAC)
             }

@@ -20,8 +20,12 @@ lav_model_estimate <- function(lavmodel       = NULL,
         group.weight <- TRUE
     }
 
-    # temp test
-    if(lavoptions$partrace) {
+    # backwards compatibility < 0.6-11
+    if(is.null(lavoptions$optim.partrace)) {
+        lavoptions$optim.partrace <- FALSE
+    }
+
+    if(lavoptions$optim.partrace) {
         # fx + parameter values
         PENV <- new.env()
         PENV$PARTRACE <- matrix(NA, nrow=0, ncol=lavmodel@nx.free + 1L)
@@ -46,7 +50,13 @@ lav_model_estimate <- function(lavmodel       = NULL,
         if(length(var.idx) > 0L) {
             START[var.idx] <- 1
         }
-        x.unpack <- START[ lavpartable$free > 0L ]
+
+        if(lavmodel@ceq.simple.only) {
+            x.unpack <- START[ lavpartable$free > 0L &
+                               !duplicated(lavpartable$free) ]
+        } else {
+            x.unpack <- START[ lavpartable$free > 0L ]
+        }
     }
 
 
@@ -131,7 +141,13 @@ lav_model_estimate <- function(lavmodel       = NULL,
         if(length(var.idx) > 0L) {
             parscale[var.idx] <- sqrt(abs(parscale[var.idx]))
         }
-        parscale <- parscale[ lavpartable$free > 0 ]
+
+        if(lavmodel@ceq.simple.only) {
+            parscale <- parscale[ lavpartable$free > 0 &
+                                  !duplicated(lavpartable$free) ]
+        } else {
+            parscale <- parscale[ lavpartable$free > 0 ]
+        }
     }
     # parscale should obey the equality constraints
     if(lavmodel@eq.constraints && lavoptions$optim.parscale != "none") {
@@ -177,35 +193,34 @@ lav_model_estimate <- function(lavmodel       = NULL,
     if(is.null(lavpartable$lower)) {
         lower <- -Inf
     } else {
-        lower <- lavpartable$lower[ lavpartable$free > 0 ]
-        if(lavmodel@eq.constraints) {
-            inf.idx <- which(!is.finite(lower))
-
-            lowerb <- lower
-            lowerb[inf.idx] <- -99999
-
-            # pack
-            l.pack <- as.numeric( (lowerb - lavmodel@eq.constraints.k0) %*%
-                                  lavmodel@eq.constraints.K )
-            lower <- l.pack
-            lower[lower == -99999] <- -Inf
+        if(lavmodel@ceq.simple.only) {
+            free.idx <- which(lavpartable$free > 0L &
+                              !duplicated(lavpartable$free))
+            lower <- lavpartable$lower[free.idx]
+        } else if(lavmodel@eq.constraints) {
+            # bounds have no effect any longer....
+            warning("lavaan warning: bounds have no effect in the presence of linear equality constraints")
+            lower <- -Inf
+        } else {
+            lower <- lavpartable$lower[ lavpartable$free > 0L ]
         }
     }
     if(is.null(lavpartable$upper)) {
         upper <- +Inf
     } else {
-        upper <- lavpartable$upper[ lavpartable$free > 0 ]
-        if(lavmodel@eq.constraints) {
-            inf.idx <- which(!is.finite(upper))
-
-            upperb <- upper
-            upperb[inf.idx] <- 99999
-
-            # pack
-            l.pack <- as.numeric( (upperb - lavmodel@eq.constraints.k0) %*%
-                                  lavmodel@eq.constraints.K )
-            upper <- l.pack
-            upper[upper == 99999] <- Inf
+        if(lavmodel@ceq.simple.only) {
+            free.idx <- which(lavpartable$free > 0L &
+                              !duplicated(lavpartable$free))
+            upper <- lavpartable$upper[free.idx]
+        } else if(lavmodel@eq.constraints) {
+            # bounds have no effect any longer....
+            if(is.null(lavpartable$lower)) {
+                # bounds have no effect any longer....
+                warning("lavaan warning: bounds have no effect in the presence of linear equality constraints")
+            }
+            upper <- +Inf
+        } else {
+            upper <- lavpartable$upper[ lavpartable$free > 0L ]
         }
     }
 
@@ -215,16 +230,16 @@ lav_model_estimate <- function(lavmodel       = NULL,
     bad.idx <- which(lower > upper)
     if(length(bad.idx) > 0L) {
         # switch
-        tmp <- lower[bad.idx]
-        lower[bad.idx] <- upper[bad.idx]
-        upper[bad.idx] <- tmp
+        #tmp <- lower[bad.idx]
+        #lower[bad.idx] <- upper[bad.idx]
+        #upper[bad.idx] <- tmp
+        lower[bad.idx] <- -Inf
+        upper[bad.idx] <- +Inf
     }
 
-
-
-
     # function to be minimized
-    objective_function <- function(x, verbose = FALSE, infToMax = FALSE) {
+    objective_function <- function(x, verbose = FALSE, infToMax = FALSE,
+                                   debug = FALSE) {
 
         # 3. standard deviations to variances
         # WARNING: x is still packed here!
@@ -273,7 +288,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
             cat("Current free parameter values =\n"); print(x); cat("\n")
         }
 
-        if(lavoptions$partrace) {
+        if(lavoptions$optim.partrace) {
             PENV$PARTRACE <- rbind(PENV$PARTRACE, c(fx, x))
         }
 
@@ -288,7 +303,8 @@ lav_model_estimate <- function(lavmodel       = NULL,
         fx
     }
 
-    gradient_function <- function(x, verbose = FALSE, infToMax = FALSE) {
+    gradient_function <- function(x, verbose = FALSE, infToMax = FALSE,
+                                  debug = FALSE) {
 
         # transform variances back
         #if(lavoptions$optim.var.transform == "sqrt" &&
@@ -318,7 +334,8 @@ lav_model_estimate <- function(lavmodel       = NULL,
                                  lavcache       = lavcache,
                                  type           = "free",
                                  group.weight   = group.weight, ### check me!!
-                                 verbose        = verbose)
+                                 verbose        = verbose,
+                                 ceq.simple     = lavmodel@ceq.simple.only)
 
         if(debug) {
             cat("Gradient function (analytical) =\n"); print(dx); cat("\n")
@@ -355,7 +372,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
         dx
     }
 
-    gradient_function_numerical <- function(x, verbose=FALSE) {
+    gradient_function_numerical <- function(x, verbose=FALSE, debug = FALSE) {
 
         # NOTE: no need to 'tranform' anything here (var/eq)
         # this is done anyway in objective_function
@@ -370,10 +387,10 @@ lav_model_estimate <- function(lavmodel       = NULL,
             x.left <- x.left2 <- x.right <- x.right2 <- x
             x.left[i]  <- x[i] - h; x.left2[i]  <- x[i] - 2*h
             x.right[i] <- x[i] + h; x.right2[i] <- x[i] + 2*h
-            fx.left   <- objective_function(x.left)
-            fx.left2  <- objective_function(x.left2)
-            fx.right  <- objective_function(x.right)
-            fx.right2 <- objective_function(x.right2)
+            fx.left   <- objective_function(x.left,   verbose = FALSE, debug = FALSE)
+            fx.left2  <- objective_function(x.left2,  verbose = FALSE, debug = FALSE)
+            fx.right  <- objective_function(x.right,  verbose = FALSE, debug = FALSE)
+            fx.right2 <- objective_function(x.right2, verbose = FALSE, debug = FALSE)
             dx[i] <- (fx.left2 - 8*fx.left + 8*fx.right - fx.right2)/(12*h)
         }
 
@@ -387,7 +404,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
         dx
     }
 
-    gradient_function_numerical_complex <- function(x, verbose=FALSE) {
+    gradient_function_numerical_complex <- function(x, verbose=FALSE, debug = FALSE) {
 
         dx <- Re(lav_func_gradient_complex(func = objective_function, x = x,
                                         h = sqrt(.Machine$double.eps)))
@@ -442,7 +459,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
 
 
     # first try: check if starting values return a finite value
-    fx <- objective_function(start.x)
+    fx <- objective_function(start.x, verbose = verbose, debug = debug)
     if(!is.finite(fx)) {
         # emergency change of start.x
         start.x <- start.x / 10
@@ -515,7 +532,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
                            #             parscale=SCALE,
                            #             trace=trace),
                            hessian=FALSE,
-                           verbose=verbose)
+                           verbose=verbose, debug=debug)
         cat("\n")
         start.x <- optim.out$par
     }
@@ -548,7 +565,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
                             upper=upper,
                             control=control,
                             scale=SCALE,
-                            verbose=verbose)
+                            verbose=verbose, debug=debug)
         if(verbose) {
             cat("  convergence status (0=ok): ", optim.out$convergence, "\n")
             cat("  nlminb message says: ", optim.out$message, "\n")
@@ -566,7 +583,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
                             upper=upper,
                             control=control,
                             scale=SCALE,
-                            verbose=verbose)
+                            verbose=verbose, debug=debug)
         }
 
         iterations <- optim.out$iterations
@@ -603,7 +620,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
                             upper=upper,
                             control=control,
                             scale=SCALE,
-                            verbose=verbose)
+                            verbose=verbose, debug=debug)
         if(verbose) {
             cat("  convergence status (0=ok): ", optim.out$convergence, "\n")
             cat("  nlminb message says: ", optim.out$message, "\n")
@@ -643,7 +660,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
                            method="BFGS",
                            control=control,
                            hessian=FALSE,
-                           verbose=verbose)
+                           verbose=verbose, debug=debug)
         if(verbose) {
             cat("  convergence status (0=ok): ", optim.out$convergence, "\n")
             cat("  optim BFGS message says: ", optim.out$message, "\n")
@@ -684,7 +701,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
                            upper=upper,
                            control=control,
                            hessian=FALSE,
-                           verbose=verbose,
+                           verbose=verbose, debug=debug,
                            infToMax=TRUE)
         if(verbose) {
             cat("  convergence status (0=ok): ", optim.out$convergence, "\n")
@@ -713,7 +730,11 @@ lav_model_estimate <- function(lavmodel       = NULL,
                                trace=0L,
                                #abs.tol=1e-20,
                                abs.tol=(.Machine$double.eps * 10),
-                               rel.tol=1e-9) # 1e-10 seems 'too strict'
+                               rel.tol=1e-9, # 1e-10 seems 'too strict'
+                               step.min=1.0, # 1.0 in < 0.5-21
+                               step.max=1.0,
+                               x.tol=1.5e-8,
+                               xf.tol=2.2e-14)
         control.nlminb <- modifyList(control.nlminb, lavoptions$control)
         control <- control.nlminb[c("eval.max", "iter.max", "trace",
                                     "abs.tol", "rel.tol")]
@@ -728,7 +749,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
                                    gradient=GRADIENT,
                                    control=control,
                                    scale=SCALE,
-                                   verbose=verbose,
+                                   verbose=verbose, debug=debug,
                                    lower=lower,
                                    upper=upper,
                                    cin = cin, cin.jac = cin.jac,
@@ -886,7 +907,7 @@ lav_model_estimate <- function(lavmodel       = NULL,
     attr(x, "parscale")   <- parscale
     if(!is.null(optim.out$con.jac)) attr(x, "con.jac")    <- optim.out$con.jac
     if(!is.null(optim.out$lambda))  attr(x, "con.lambda") <- optim.out$lambda
-    if(lavoptions$partrace) {
+    if(lavoptions$optim.partrace) {
         attr(x, "partrace") <- PENV$PARTRACE
     }
 

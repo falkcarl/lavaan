@@ -6,14 +6,12 @@
 Fit a Structural Equation Model (SEM) using the Structural After Measurement
 (SAM) approach.}
 \usage{
-sam(model = NULL, data = NULL, cmd = "sem",
-    mm.list = NULL, mm.args = list(bounds = "standard"), 
-    struc.args = list(fixed.x = FALSE),
-    sam.method = "local", ...,
-    local.options = list(M.method = "ML", veta.force.pd = TRUE,
-                         twolevel.method = "h1"),
-    global.options = list(),
-    output = "lavaan")
+sam(model = NULL, data = NULL, cmd = "sem", se = "twostep", 
+    mm.list = NULL, mm.args = list(bounds = "standard", se = "standard"), 
+    struc.args = list(estimator = "ML", se = "standard"), 
+    sam.method = "local", alpha.correction = 0L, ..., 
+    local.options = list(M.method = "ML", veta.force.pd = TRUE, 
+    twolevel.method = "h1"), global.options = list(), output = "lavaan")
 }
 \arguments{
 \item{model}{A description of the user-specified model. Typically, the model
@@ -26,6 +24,12 @@ sam(model = NULL, data = NULL, cmd = "sem",
 \item{cmd}{Character. Which command is used to run the sem models. The possible
     choices are \code{"sem"}, \code{"cfa"} or \code{"lavaan"}, determining how
     we deal with default options.}
+\item{se}{Character. The type of standard errors that are used in the
+    final (structural) model. If \code{"twostep"} (the default), the
+    standard errors take the estimation uncertainty of the first (measurement) 
+    stage into account. If \code{"standard"}, this uncertainty is ignored,
+    and we treat the measurement information as known. If \code{"none"},
+    no standard errors are computed.}
 \item{mm.list}{List. Define the measurement blocks. 
      Each element of the list should
      be either a single name of a latent variable, or a vector of latent
@@ -36,7 +40,15 @@ sam(model = NULL, data = NULL, cmd = "sem",
     for a complete list.}
 \item{struc.args}{List. Optional arguments for the fitting function of the
     structural part only. See \code{\link{lavOptions}} for a complete list.}
-\item{sam.method}{Character. Can be set to \code{"local"} or \code{"global"}.}
+\item{sam.method}{Character. Can be set to \code{"local"}, \code{"global"}
+    or \code{"fsr"}. In the latter case, the results are the same as if
+    Bartlett factor scores were used, without any bias correction.}
+\item{alpha.correction}{Integer. Acceptable values are in the range 0 till
+    N-1. If zero (the default), no small sample correction is performed, 
+    and the bias-correction is the same as with local SAM. When equal to N-1, 
+    the bias-correction is eliminated, and the results are the same as 
+    naive FSR. Typical values are 0, P+1 (where P is the number of
+    predictors in the structural model), P+5, and (N-1)/2.}
 \item{...}{Many more additional options can be defined, using 'name = value'.
     See \code{\link{lavOptions}} for a complete list. These options affect
     both the measurement blocks and the structural part.}
@@ -61,8 +73,10 @@ sam(model = NULL, data = NULL, cmd = "sem",
   a list.
 }
 \references{
-Rosseel and Loh (2021). A structural-after-measurement (SAM) approach
-to SEM. URL https://osf.io/pekbm/.}
+Rosseel and Loh (2021). A structural-after-measurement approach to Structural
+Equation Modeling. Psychological Methods. Advance online publication.
+https://dx.doi.org/10.1037/met0000503
+}
 \seealso{
 \code{\link{lavaan}}
 }

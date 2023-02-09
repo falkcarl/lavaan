@@ -21,6 +21,11 @@ lav_model_objective <- function(lavmodel       = NULL,
     meanstructure  <- lavmodel@meanstructure
     estimator      <- lavmodel@estimator
     categorical    <- lavmodel@categorical
+    if(.hasSlot(lavmodel, "correlation")) {
+        correlation    <- lavmodel@correlation
+    } else {
+        correlation    <- FALSE
+    }
     group.w.free   <- lavmodel@group.w.free
     fixed.x        <- lavmodel@fixed.x
     conditional.x  <- lavmodel@conditional.x
@@ -34,7 +39,7 @@ lav_model_objective <- function(lavmodel       = NULL,
 
 
     # do we need WLS.est?
-    if(estimator %in% c("ULS", "GLS", "WLS", "DWLS", "NTRLS", "DLS")) {
+    if(estimator %in% c("ULS", "WLS", "DWLS", "NTRLS", "DLS")) {
 
         lavimplied <- lav_model_implied(lavmodel, GLIST = GLIST)
         # check for COV with negative diagonal elements?
@@ -64,7 +69,7 @@ lav_model_objective <- function(lavmodel       = NULL,
             Mu.hat <- computeMuHat(lavmodel = lavmodel, GLIST = GLIST)
         }
         if(debug) print(WLS.est)
-    } else if(estimator %in% c("ML", "PML", "FML", "REML") &&
+    } else if(estimator %in% c("ML", "GLS", "PML", "FML", "REML", "catML") &&
               lavdata@nlevels == 1L) {
         # compute moments for all groups
         #if(conditional.x) {
@@ -73,7 +78,8 @@ lav_model_objective <- function(lavmodel       = NULL,
         #                     extra = (estimator %in% c("ML", "REML","NTRLS")))
         #} else {
             Sigma.hat <- computeSigmaHat(lavmodel = lavmodel, GLIST = GLIST,
-                             extra = (estimator %in% c("ML", "REML","NTRLS")))
+                             extra = (estimator %in% c("ML", "REML",
+                                                       "NTRLS", "catML")))
         #}
 
         if(estimator == "REML") {
@@ -143,10 +149,14 @@ lav_model_objective <- function(lavmodel       = NULL,
                 stop("this estimator: `", estimator,
                      "' can not be used with incomplete data and the missing=\"ml\" option")
             }
-        } else if(estimator == "ML" || estimator == "Bayes") {
+        } else if(estimator == "ML" || estimator == "Bayes" ||
+                  estimator == "catML") {
         # complete data
             # ML and friends
             if(lavdata@nlevels > 1L) {
+                if(estimator %in% c("catML", "Bayes")) {
+                    stop("lavaan ERROR: multilevel data not supported for estimator ", estimator)
+                }
                 group.fx <- estimator.2L(lavmodel       = lavmodel,
                                          GLIST          = GLIST,
                                          Lp             = lavdata@Lp[[g]],
@@ -173,12 +183,23 @@ lav_model_objective <- function(lavmodel       = NULL,
                     data.cov.log.det = lavsamplestats@cov.log.det[[g]],
                     meanstructure    = meanstructure)
             }
-        } else if(estimator == "GLS" ||
-                  estimator == "WLS" ||
+
+
+        ### GLS #### (0.6-10: nog using WLS function any longer)
+        } else if(estimator == "GLS") {
+            group.fx <- estimator.GLS(
+                    Sigma.hat        = Sigma.hat[[g]],
+                    Mu.hat           = Mu.hat[[g]],
+                    data.cov         = lavsamplestats@cov[[g]],
+                    data.cov.inv     = lavsamplestats@icov[[g]],
+                    data.mean        = lavsamplestats@mean[[g]],
+                    meanstructure    = meanstructure)
+
+        } else if( estimator == "WLS" ||
                   estimator == "DLS" ||
                   estimator == "NTRLS") {
             # full weight matrix
-            if(estimator == "GLS" || estimator == "WLS") {
+            if(estimator == "WLS") {
                 WLS.V <- lavsamplestats@WLS.V[[g]]
             } else if(estimator == "DLS") {
                 if(estimator.args$dls.GammaNT == "sample") {
@@ -297,7 +318,7 @@ lav_model_objective <- function(lavmodel       = NULL,
             stop("unsupported estimator: ", estimator)
         }
 
-        if(estimator == "ML" || estimator == "REML" || estimator == "NTRLS") {
+        if(estimator %in% c("ML", "REML", "NTRLS", "catML")) {
             if(lavdata@nlevels == 1L) {
                 group.fx <- 0.5 * group.fx ## FIXME
             }
@@ -339,7 +360,8 @@ lav_model_objective <- function(lavmodel       = NULL,
     }
 
     # penalty for group.w + ML
-    if(group.w.free && estimator %in% c("ML","MML","FML","PML", "REML")) {
+    if(group.w.free && estimator %in% c("ML","MML","FML","PML",
+                                        "REML", "catML")) {
         #obs.prop <- unlist(lavsamplestats@group.w)
         #est.prop <- unlist(GW)
         # if(estimator %in% c("WLS", "GLS", ...) {

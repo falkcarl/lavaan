@@ -14,28 +14,28 @@ model as specified by the user. We refer to this table as the parameter table.}
 \usage{
 lavaanify(model = NULL, meanstructure = FALSE, int.ov.free = FALSE, 
     int.lv.free = FALSE, orthogonal = FALSE, orthogonal.y = FALSE,
-    orthogonal.x = FALSE, orthogonal.efa = FALSE, std.lv = FALSE, 
-    effect.coding = "",
-    conditional.x = FALSE, fixed.x = FALSE, parameterization = "delta", 
-    constraints = NULL, auto = FALSE, model.type = "sem", 
+    orthogonal.x = FALSE, orthogonal.efa = FALSE, std.lv = FALSE,
+    correlation = FALSE, effect.coding = "", conditional.x = FALSE, 
+    fixed.x = FALSE, parameterization = "delta", constraints = NULL, 
+    ceq.simple = FALSE, auto = FALSE, model.type = "sem", 
     auto.fix.first = FALSE, auto.fix.single = FALSE, auto.var = FALSE, 
     auto.cov.lv.x = FALSE, auto.cov.y = FALSE, auto.th = FALSE, 
     auto.delta = FALSE, auto.efa = FALSE, 
-    varTable = NULL, ngroups = 1L, group.equal = NULL, 
-    group.partial = NULL, group.w.free = FALSE,
+    varTable = NULL, ngroups = 1L, nthresholds = NULL, 
+    group.equal = NULL, group.partial = NULL, group.w.free = FALSE,
     debug = FALSE, warn = TRUE, as.data.frame. = TRUE)
 
 lavParTable(model = NULL, meanstructure = FALSE, int.ov.free = FALSE,
     int.lv.free = FALSE, orthogonal = FALSE, orthogonal.y = FALSE, 
     orthogonal.x = FALSE, orthogonal.efa = FALSE, std.lv = FALSE,
-    effect.coding = "",
-    conditional.x = FALSE, fixed.x = FALSE, parameterization = "delta", 
-    constraints = NULL, auto = FALSE, model.type = "sem",
+    correlation = FALSE, effect.coding = "", conditional.x = FALSE, 
+    fixed.x = FALSE, parameterization = "delta", constraints = NULL, 
+    ceq.simple = FALSE, auto = FALSE, model.type = "sem",
     auto.fix.first = FALSE, auto.fix.single = FALSE, auto.var = FALSE,
     auto.cov.lv.x = FALSE, auto.cov.y = FALSE, auto.th = FALSE,
     auto.delta = FALSE, auto.efa = FALSE,
-    varTable = NULL, ngroups = 1L, group.equal = NULL,
-    group.partial = NULL, group.w.free = FALSE,
+    varTable = NULL, ngroups = 1L, nthresholds = NULL,
+    group.equal = NULL, group.partial = NULL, group.w.free = FALSE,
     debug = FALSE, warn = TRUE, as.data.frame. = TRUE)
 
 lavParseModelString(model.syntax = '', as.data.frame. = FALSE, 
@@ -71,6 +71,9 @@ the model both for both observed and latent variables.}
       the \code{group.label} argument, then only the latent variances i
       of the first group will be fixed to 1.0, while the latent
       variances of other groups are set free.}
+\item{correlation}{If \code{TRUE}, a correlation structure is fitted. For
+    continuous data, this implies that the (residual) variances are no
+    longer parameters of the model.}
 \item{effect.coding}{Can be logical or character string. If
      logical and \code{TRUE}, this implies     
      \code{effect.coding = c("loadings", "intercepts")}. If logical and 
@@ -98,6 +101,10 @@ the model both for both observed and latent variables.}
     the theta parameterization is used.}
 \item{constraints}{Additional (in)equality constraints. See details for
     more information.}
+\item{ceq.simple}{If \code{TRUE}, and no other general constraints are
+    used in the model, simple equality constraints are represented in the
+    parameter table as duplicated free parameters (instead of extra rows
+    with \code{op = "=="}).}
 \item{auto}{If \code{TRUE}, the default values are used for the auto.*
     arguments, depending on the value of \code{model.type}.}
 \item{model.type}{Either \code{"sem"} or \code{"growth"}; only used if
@@ -125,6 +132,13 @@ the model both for both observed and latent variables.}
 \item{varTable}{The variable table containing information about the
     observed variables in the model.}
 \item{ngroups}{The number of (independent) groups.}
+\item{nthresholds}{Either a single integer or a named vector of integers.
+    If \code{nthresholds} is a single integer, all endogenous
+    variables are assumed to be ordered with \code{nthresholds} indicating 
+    the number of thresholds needed in the model. If \code{nthresholds} is a 
+    named vector, it indicates the number of thresholds for these ordered
+    variables only. This argument should not be used in combination with 
+    varTable.}
 \item{group.equal}{A vector of character strings. Only used in
     a multiple group analysis. Can be one or more of the following:
     \code{"loadings"}, \code{"intercepts"},
@@ -244,7 +258,7 @@ There can be seven types of formula-like expressions in the model syntax:
 
     \item Formative factors: The \code{"<~"} operator can be used to define
       a formative factor (on the right hand side of the operator), in a
-      similar why as a reflexive factor is defined (using the \code{"=~"}
+      similar way to how a reflexive factor is defined (using the \code{"=~"}
       operator). This is just syntax sugar to define a phantom latent
       variable (equivalent to using \code{"f =~ 0"}). And in addition, the
       (residual) variance of the formative factor is fixed to zero.
@@ -389,5 +403,6 @@ also label that parameter, you can use something like:
 }
 \references{
 Yves Rosseel (2012). lavaan: An R Package for Structural Equation
-Modeling. Journal of Statistical Software, 48(2), 1-36. URL
-http://www.jstatsoft.org/v48/i02/.}
+Modeling. Journal of Statistical Software, 48(2), 1-36. 
+\doi{https://doi.org/10.18637/jss.v048.i02}}
+

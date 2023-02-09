@@ -1,9 +1,14 @@
 # various ways to compute a (scaled) difference chi-square test statistic
 
+# - 0.6-13: fix multiple-group UG^2 bug in Satorra.2000 (reported by
+#           Gronneberg, Foldnes and Moss) when Satterthwaite = TRUE and
+#           ngroups > 1L (use old.approach = TRUE to get the old result)
+
 lav_test_diff_Satorra2000 <- function(m1, m0, H1 = TRUE, A.method = "delta",
                                       A = NULL,
                                       Satterthwaite = FALSE,
                                       scaled.shifted = FALSE,
+                                      old.approach = FALSE,
                                       debug = FALSE) {
 
     if(scaled.shifted) {
@@ -57,8 +62,13 @@ lav_test_diff_Satorra2000 <- function(m1, m0, H1 = TRUE, A.method = "delta",
         if(is.null(A)) {
             A <- lav_test_diff_A(m1, m0, method = A.method, reference = "H1")
             # take into account equality constraints m1
-            if(A.method == "delta" && m1@Model@eq.constraints) {
-                A <- A %*% t(m1@Model@eq.constraints.K)
+            if(A.method == "delta") {
+                if(m1@Model@eq.constraints) {
+                    A <- A %*% t(m1@Model@eq.constraints.K)
+                } else if(.hasSlot(m1@Model, "ceq.simple.only") &&
+                          m1@Model@ceq.simple.only) {
+                    A <- A %*% t(m1@Model@ceq.simple.K)
+                }
             }
             if(debug) print(A)
         }
@@ -82,6 +92,9 @@ lav_test_diff_Satorra2000 <- function(m1, m0, H1 = TRUE, A.method = "delta",
             # take into account equality constraints m1
             if(m0@Model@eq.constraints) {
                 A <- A %*% t(m0@Model@eq.constraints.K)
+            } else if(.hasSlot(m0@Model, "ceq.simple.only") &&
+                      m0@Model@ceq.simple.only) {
+                A <- A %*% t(m0@Model@ceq.simple.K)
             }
             if(debug) print(A)
         }
@@ -106,23 +119,54 @@ lav_test_diff_Satorra2000 <- function(m1, m0, H1 = TRUE, A.method = "delta",
     # PAAPAAP
     PAAPAAP <- P.inv %*% t(A) %*% MASS::ginv(A %*% P.inv %*% t(A)) %*% A %*% P.inv
 
-    trace.UGamma  <- numeric(ngroups)
-    trace.UGamma2 <- numeric(ngroups)
-    for(g in 1:ngroups) {
-        UG.group <- WLS.V[[g]] %*% Gamma[[g]] %*% WLS.V[[g]] %*%
-                    PI[[g]] %*% PAAPAAP %*% t(PI[[g]])
-        trace.UGamma[g]  <- sum(diag(UG.group))
-        if(Satterthwaite) {
-            trace.UGamma2[g] <- sum(diag(UG.group %*% UG.group))
-        }
-    }
-
     # compute scaling factor
     fg <- unlist(m1@SampleStats@nobs)/m1@SampleStats@ntotal
 
-    trace.UGamma <- sum(fg * trace.UGamma)
-    if(Satterthwaite) {
-        trace.UGamma2 <- sum(fg * trace.UGamma2)
+
+    # this is what we did <0.6-13
+    if(old.approach) {
+        trace.UGamma  <- numeric(ngroups)
+        trace.UGamma2 <- numeric(ngroups)
+        for(g in 1:ngroups) {
+            UG.group <- WLS.V[[g]] %*% Gamma[[g]] %*% WLS.V[[g]] %*%
+                        PI[[g]] %*% PAAPAAP %*% t(PI[[g]])
+            trace.UGamma[g]  <- sum(diag(UG.group))
+            if(Satterthwaite) {
+                trace.UGamma2[g] <- sum(diag(UG.group %*% UG.group))
+            }
+        }
+
+        trace.UGamma <- sum(fg * trace.UGamma)
+        if(Satterthwaite) {
+            trace.UGamma2 <- sum(fg * trace.UGamma2)
+        }
+    } else {
+        # for trace.UGamma, we can compute the trace per group
+        # as in Satorra (2000) eq. 23
+        trace.UGamma  <- numeric(ngroups)
+        for(g in 1:ngroups) {
+            UG.group <- WLS.V[[g]] %*% Gamma[[g]] %*% WLS.V[[g]] %*%
+                        PI[[g]] %*% PAAPAAP %*% t(PI[[g]])
+            trace.UGamma[g]  <- sum(diag(UG.group))
+        }
+        trace.UGamma <- sum(fg * trace.UGamma)
+
+        # but for trace.UGamma2, we can no longer compute the trace per group
+        trace.UGamma2 <- as.numeric(NA)
+        if(Satterthwaite) {
+            # global approach (not group-specific)
+            Gamma.f <- Gamma
+            for (g in seq_along(Gamma)) {
+                Gamma.f[[g]] <- fg[g] * Gamma[[g]]
+            }
+            Gamma.all  <- lav_matrix_bdiag(Gamma.f)
+            V.all      <- lav_matrix_bdiag(WLS.V)
+            PI.all     <- do.call(rbind, PI)
+            U.all      <- V.all %*% PI.all %*% PAAPAAP %*% t(PI.all) %*% V.all
+            UG.all <- U.all %*% Gamma.all
+            UG.all2 <- UG.all %*% UG.all
+            trace.UGamma2 <- sum(diag(UG.all2))
+        }
     }
 
     if(Satterthwaite && !scaled.shifted) {
@@ -145,6 +189,7 @@ lav_test_diff_Satorra2000 <- function(m1, m0, H1 = TRUE, A.method = "delta",
     }
 
     list(T.delta = T.delta, scaling.factor = cd, df.delta = df.delta,
+         trace.UGamma = trace.UGamma, trace.UGamma2 = trace.UGamma2,
          a = a, b = b)
 }
 
@@ -226,14 +271,14 @@ lav_test_diff_SatorraBentler2010 <- function(m1, m0, H1 = FALSE) {
                          symmetric=TRUE, only.values=TRUE)$values
         if(any(eigvals < -1 * .Machine$double.eps^(3/4))) {
             warning(
-  "lavaan WARNING: information matrix of the M01 model is not positive definite.\n",
-"                  As a result, the scale-factor can not be computed.")
-            cd <- as.numeric(NA)
-        } else {
+  "lavaan WARNING: information matrix of the M01 model is not positive definite.\n")
+#"                  As a result, the scale-factor can not be computed.")
+            #cd <- as.numeric(NA)
+        } #else {
             # compute c_d
             # cd.01 <- (r0 * c01 - r1 * c0) / m ???
             cd <- (r0 * c0 - r1 * c01) / m
-        }
+        #}
 
     } else {
         # M1 with M0 parameters (as in Satorra & Bentler 2010)
@@ -246,13 +291,13 @@ lav_test_diff_SatorraBentler2010 <- function(m1, m0, H1 = FALSE) {
                          symmetric=TRUE, only.values=TRUE)$values
         if(any(eigvals < -1 * .Machine$double.eps^(3/4))) {
             warning(
-  "lavaan WARNING: information matrix of the M10 model is not positive definite.\n",
-"                  As a result, the scale-factor can not be computed.")
-            cd <- as.numeric(NA)
-        } else {
+  "lavaan WARNING: information matrix of the M10 model is not positive definite.\n")
+#"                  As a result, the scale-factor can not be computed.")
+            #cd <- as.numeric(NA)
+        } #else {
             # compute c_d
             cd <- (r0 * c0 - r1 * c10) / m
-        }
+        #}
     }
 
     # compute scaled difference test
@@ -355,11 +400,17 @@ lav_test_diff_A <- function(m1, m0, method = "delta", reference = "H1") {
         # take into account equality constraints m0
         if(m0@Model@eq.constraints) {
             Delta0 <- Delta0 %*% m0@Model@eq.constraints.K
+        } else if(.hasSlot(m0@Model, "ceq.simple.only") &&
+                  m0@Model@ceq.simple.only) {
+            Delta0 <- Delta0 %*% t(m0@Model@ceq.simple.K)
         }
 
         # take into account equality constraints m1
         if(m1@Model@eq.constraints) {
             Delta1 <- Delta1 %*% m1@Model@eq.constraints.K
+        } else if(.hasSlot(m1@Model, "ceq.simple.only") &&
+                  m1@Model@ceq.simple.only) {
+            Delta1 <- Delta1 %*% t(m1@Model@ceq.simple.K)
         }
 
         #H <- solve(t(Delta1) %*% Delta1) %*% t(Delta1) %*% Delta0

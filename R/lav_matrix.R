@@ -387,6 +387,14 @@ lav_matrix_vech_match_idx <- function(n = 1L, diagonal = TRUE,
 # default dup:
 lav_matrix_duplication <- .dup3
 
+# duplication matrix for correlation matrices:
+# - it returns a matrix of size p^2 * (p*(p-1))/2
+# - the columns corresponding to the diagonal elements have been removed
+lav_matrix_duplication_cor <- function(n = 1L) {
+    out <- lav_matrix_duplication(n = n)
+    diag.idx <- lav_matrix_diagh_idx(n = n)
+    out[,-diag.idx,drop = FALSE]
+}
 
 # compute t(D) %*% A (without explicitly computing D)
 # sqrt(nrow(A)) is an integer
@@ -432,6 +440,30 @@ lav_matrix_duplication_dup_pre2 <- function(A = matrix(0,0,0)) {
     OUT
 }
 
+# compute t(D) %*% A (without explicitly computing D)
+# sqrt(nrow(A)) is an integer
+# A is not symmetric, and not even square, only n^2 ROWS
+# correlation version: ignoring diagonal elements
+lav_matrix_duplication_cor_pre <- function(A = matrix(0,0,0)) {
+
+    # number of rows
+    n2 <- NROW(A)
+
+    # square nrow(A) only, n2 = n^2
+    stopifnot(sqrt(n2) == round(sqrt(n2)))
+
+    # dimension
+    n <- sqrt(n2)
+
+    # dup idx
+    idx1 <- lav_matrix_vech_idx(n,   diagonal = FALSE)
+    idx2 <- lav_matrix_vechru_idx(n, diagonal = FALSE)
+
+    OUT <- A[idx1, , drop = FALSE] + A[idx2 , , drop = FALSE]
+    u <- which(idx1 %in% idx2); OUT[u,] <- OUT[u,] / 2.0
+
+    OUT
+}
 
 # compute A %*% D (without explicitly computing D)
 # sqrt(ncol(A)) must be an integer
@@ -456,6 +488,32 @@ lav_matrix_duplication_post <- function(A = matrix(0,0,0)) {
     OUT
 }
 
+# compute A %*% D (without explicitly computing D)
+# sqrt(ncol(A)) must be an integer
+# A is not symmetric, and not even square, only n^2 COLUMNS
+# correlation version: ignoring the diagonal elements
+lav_matrix_duplication_cor_post <- function(A = matrix(0,0,0)) {
+
+    # number of columns
+    n2 <- NCOL(A)
+
+    # square A only, n2 = n^2
+    stopifnot(sqrt(n2) == round(sqrt(n2)))
+
+    # dimension
+    n <- sqrt(n2)
+
+    # dup idx
+    idx1 <- lav_matrix_vech_idx(n,   diagonal = FALSE)
+    idx2 <- lav_matrix_vechru_idx(n, diagonal = FALSE)
+
+    OUT <- A[, idx1, drop = FALSE] + A[, idx2, drop = FALSE]
+    u <- which(idx1 %in% idx2); OUT[,u] <- OUT[,u] / 2.0
+
+    OUT
+}
+
+
 # compute t(D) %*% A %*% D (without explicitly computing D)
 # A must be a square matrix and sqrt(ncol) an integer
 lav_matrix_duplication_pre_post <- function(A = matrix(0,0,0)) {
@@ -471,6 +529,32 @@ lav_matrix_duplication_pre_post <- function(A = matrix(0,0,0)) {
 
     # dup idx
     idx1 <- lav_matrix_vech_idx(n); idx2 <- lav_matrix_vechru_idx(n)
+
+    OUT <- A[idx1, , drop = FALSE] + A[idx2, , drop = FALSE]
+    u <- which(idx1 %in% idx2); OUT[u,] <- OUT[u,] / 2.0
+    OUT <- OUT[, idx1, drop = FALSE] + OUT[, idx2, drop = FALSE]
+    OUT[,u] <- OUT[,u] / 2.0
+
+    OUT
+}
+
+# compute t(D) %*% A %*% D (without explicitly computing D)
+# A must be a square matrix and sqrt(ncol) an integer
+# correlation version: ignoring diagonal elements
+lav_matrix_duplication_cor_pre_post <- function(A = matrix(0,0,0)) {
+
+    # number of columns
+    n2 <- NCOL(A)
+
+    # square A only, n2 = n^2
+    stopifnot(NROW(A) == n2, sqrt(n2) == round(sqrt(n2)))
+
+    # dimension
+    n <- sqrt(n2)
+
+    # dup idx
+    idx1 <- lav_matrix_vech_idx(n,   diagonal = FALSE)
+    idx2 <- lav_matrix_vechru_idx(n, diagonal = FALSE)
 
     OUT <- A[idx1, , drop = FALSE] + A[idx2, , drop = FALSE]
     u <- which(idx1 %in% idx2); OUT[u,] <- OUT[u,] / 2.0
@@ -1074,7 +1158,7 @@ lav_matrix_symmetric_inverse <- function(S, logdet   = FALSE,
         if(zero.warn) {
             warning("lavaan WARNING: matrix to be inverted contains zero cols/rows")
         }
-        S <- S[-zero.idx, -zero.idx]
+        S <- S[-zero.idx, -zero.idx, drop = FALSE]
     }
 
     P <- NCOL(S)
@@ -1089,16 +1173,28 @@ lav_matrix_symmetric_inverse <- function(S, logdet   = FALSE,
         tmp <- S[1,1]
         S.inv <- matrix(1/tmp, 1, 1)
         if(logdet) {
-            attr(S.inv, "logdet") <- log(tmp)
+            if(tmp > 0) {
+                 attr(S.inv, "logdet") <- log(tmp)
+            } else {
+                 attr(S.inv, "logdet") <- -Inf
+            }
         }
     } else if(P == 2L) {
         a11 <- S[1,1]; a12 <- S[1,2]; a21 <- S[2,1]; a22 <- S[2,2]
         tmp <- a11*a22 - a12*a21
         if(tmp == 0) {
+            S.inv <- matrix(c(Inf, Inf, Inf, Inf), 2, 2)
+            if(logdet) {
+                attr(S.inv, "logdet") <- -Inf
+            }
         } else {
             S.inv <- matrix(c(a22/tmp, -a21/tmp, -a12/tmp, a11/tmp), 2, 2)
             if(logdet) {
-                attr(S.inv, "logdet") <- log(tmp)
+                if(tmp > 0) {
+                    attr(S.inv, "logdet") <- log(tmp)
+                } else {
+                     attr(S.inv, "logdet") <- -Inf
+                }
             }
         }
     } else if(Sinv.method == "eigen") {
@@ -1326,7 +1422,11 @@ lav_matrix_symmetric_logdet_update <- function(S.logdet, S.inv,
 
 # compute `lambda': the smallest root of the determinantal equation
 # |M - lambda*P| = 0 (see Fuller 1987, p.125 or p.172
-# allow for zero rows/columns in P
+#
+# the function allows for zero rows/columns in P, by regressing them out
+# this approach was suggested to me by Wayne A. Fuller, personal communication,
+# 12 Nov 2020
+#
 lav_matrix_symmetric_diff_smallest_root <- function(M = NULL, P = NULL,
                                                     warn = FALSE) {
 
@@ -1586,5 +1686,71 @@ lav_matrix_cov_wt <- function(Y, wt = NULL) {
     out
 }
 
+# compute (I-A)^{-1} where A is square
+# using a (truncated) Neumann series:  (I-A)^{-1} = \sum_k=0^{\infty} A^k
+#
+# as A is typically sparse, we can stop if all elements in A^k are zero for,
+# say, k<=6
+lav_matrix_inverse_iminus <- function(A = NULL) {
 
+    nr <- nrow(A); nc <- ncol(A)
+    stopifnot(nr == nc)
+
+    # create I + A
+    IA <- A
+    diag.idx <- lav_matrix_diag_idx(nr)
+    IA[diag.idx] <- IA[diag.idx] + 1
+
+    # initial approximation
+    IA.inv <- IA
+
+    # first order
+    A2 <- A %*% A
+    if(all(A2 == 0)) {
+        # we are done
+        return(IA.inv)
+    } else {
+        IA.inv <- IA.inv + A2
+    }
+
+    # second order
+    A3 <- A2 %*% A
+	if(all(A3 == 0)) {
+        # we are done
+        return(IA.inv)
+    } else {
+        IA.inv <- IA.inv + A3
+    }
+
+    # third order
+    A4 <- A3 %*% A
+    if(all(A4 == 0)) {
+        # we are done
+        return(IA.inv)
+    } else {
+        IA.inv <- IA.inv + A4
+    }
+
+    # fourth order
+    A5 <- A4 %*% A
+    if(all(A5 == 0)) {
+        # we are done
+        return(IA.inv)
+    } else {
+        IA.inv <- IA.inv + A5
+    }
+
+    # fifth order
+    A6 <- A5 %*% A
+    if(all(A6 == 0)) {
+        # we are done
+        return(IA.inv)
+    } else {
+        # naive version (for now)
+        tmp <- -A
+        tmp[diag.idx] <- tmp[diag.idx] + 1
+        IA.inv <- solve(tmp)
+        return(IA.inv)
+    }
+}
 

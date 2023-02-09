@@ -7,7 +7,7 @@ Fit a Structural Equation Model (SEM).}
 sem(model = NULL, data = NULL, ordered = NULL, sampling.weights = NULL,
     sample.cov = NULL, sample.mean = NULL, sample.th = NULL,
     sample.nobs = NULL, group = NULL, cluster = NULL, 
-    constraints = "", WLS.V = NULL, NACOV = NULL,
+    constraints = "", WLS.V = NULL, NACOV = NULL, ov.order = "model",
     ...)
 }
 \arguments{
@@ -67,6 +67,13 @@ in a multiple group analysis.}
     For a multiple group analysis, a list with an asymptotic
     variance-covariance matrix for each group. See the \code{WLS.V}
     argument for information about the order of the elements.}
+\item{ov.order}{Character. If \code{"model"} (the default), the order of
+    the observed variable names (as reflected for example in the output of
+    \code{lavNames()}) is determined by the model syntax. If
+    \code{"data"}, the order is determined by the data (either the full
+    data.frame or the sample (co)variance matrix). If the \code{WLS.V}
+    and/or \code{NACOV} matrices are provided, this argument is currently
+    set to \code{"data"}.}
 \item{...}{Many more additional options can be defined, using 'name = value'.
     See \code{\link{lavOptions}} for a complete list.}
 }
@@ -86,8 +93,8 @@ in a multiple group analysis.}
 }
 \references{
 Yves Rosseel (2012). lavaan: An R Package for Structural Equation
-Modeling. Journal of Statistical Software, 48(2), 1-36. URL
-http://www.jstatsoft.org/v48/i02/.}
+Modeling. Journal of Statistical Software, 48(2), 1-36. 
+\doi{https://doi.org/10.18637/jss.v048.i02}}
 \seealso{
 \code{\link{lavaan}}
 }

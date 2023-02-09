@@ -101,21 +101,20 @@ estimator.REML <- function(Sigma.hat=NULL, Mu.hat=NULL,
     fx
 }
 
-# 'classic' fitting function for GLS, not used for now
+# 'classic' fitting function for GLS
+# used again since 0.6-10 (we used the much slower estimator.WLS before)
 estimator.GLS <- function(Sigma.hat=NULL, Mu.hat=NULL,
-                          data.cov=NULL, data.mean=NULL, data.nobs=NULL,
+                          data.cov = NULL, data.cov.inv=NULL, data.mean=NULL,
                           meanstructure=FALSE) {
 
-    W <- data.cov
-    W.inv <- solve(data.cov)
-    if(!meanstructure) {
-        tmp <- ( W.inv %*% (W - Sigma.hat) )
-        fx <- 0.5 * (data.nobs-1)/data.nobs * sum( tmp * t(tmp))
-    } else {
-        tmp <- W.inv %*% (W - Sigma.hat)
-        tmp1 <- 0.5 * (data.nobs-1)/data.nobs * sum( tmp * t(tmp))
-        tmp2 <- sum(diag( W.inv %*% tcrossprod(data.mean - Mu.hat) ))
-        fx <- tmp1 + tmp2
+    tmp <- data.cov.inv %*% (data.cov - Sigma.hat)
+    # tmp is not perfectly symmetric, so we use t(tmp) on the next line
+    # to obtain the same value as estimator.WLS
+    fx <- 0.5 * sum( tmp * t(tmp))
+
+    if(meanstructure) {
+        tmp2 <- sum(data.cov.inv * tcrossprod(data.mean - Mu.hat))
+        fx <- fx + tmp2
     }
 
     # no negative values
@@ -134,7 +133,7 @@ estimator.WLS <- function(WLS.est=NULL, WLS.obs=NULL, WLS.V=NULL) {
     # since 0.5-17, we use crossprod twice
     diff <- WLS.obs - WLS.est
     fx <- as.numeric( crossprod(crossprod(WLS.V, diff), diff) )
-    # (faster?) alternative: sum(WLS.V * tcrossprod(diff))
+    # todo alternative: using chol(WLS.V)
 
     # no negative values
     if(is.finite(fx) && fx < 0.0) fx <- 0.0
@@ -738,22 +737,29 @@ estimator.2L <- function(lavmodel       = NULL,
                          lavsamplestats = NULL,
                          group          = 1L) {
 
-    # DEBUG ONLY
-    if(lavmodel@conditional.x) {
-        return(-1000)
-    }
-
     # compute model-implied statistics for all blocks
     implied <- lav_model_implied(lavmodel, GLIST = GLIST)
 
     # here, we assume only 2!!! levels, at [[1]] and [[2]]
-    Sigma.W <- implied$cov[[  (group-1)*2 + 1]]
-    Mu.W    <- implied$mean[[ (group-1)*2 + 1]]
-    Sigma.B <- implied$cov[[  (group-1)*2 + 2]]
-    Mu.B    <- implied$mean[[ (group-1)*2 + 2]]
+    if(lavmodel@conditional.x) {
+        Res.Sigma.W <- implied$res.cov[[    (group-1)*2 + 1]]
+        Res.Int.W   <- implied$res.int[[    (group-1)*2 + 1]]
+        Res.Pi.W    <- implied$res.slopes[[ (group-1)*2 + 1]]
+
+        Res.Sigma.B <- implied$res.cov[[    (group-1)*2 + 2]]
+        Res.Int.B   <- implied$res.int[[    (group-1)*2 + 2]]
+        Res.Pi.B    <- implied$res.slopes[[ (group-1)*2 + 2]]
+    } else {
+        Sigma.W <- implied$cov[[  (group-1)*2 + 1]]
+        Mu.W    <- implied$mean[[ (group-1)*2 + 1]]
+        Sigma.B <- implied$cov[[  (group-1)*2 + 2]]
+        Mu.B    <- implied$mean[[ (group-1)*2 + 2]]
+    }
 
     if(lavsamplestats@missing.flag) {
-
+        if(lavmodel@conditional.x) {
+            stop("lavaan ERROR: multilevel + conditional.x is not ready yet for fiml; rerun with conditional.x = FALSE\n")
+        }
         #SIGMA.B <- Sigma.B[Lp$both.idx[[2]], Lp$both.idx[[2]], drop = FALSE]
         #if(any(diag(SIGMA.B) < 0)) {
         #    return(+Inf)
@@ -772,10 +778,21 @@ estimator.2L <- function(lavmodel       = NULL,
                   log2pi = FALSE, minus.two = TRUE)
     } else {
         YLp <- lavsamplestats@YLp[[group]]
-        loglik <- lav_mvnorm_cluster_loglik_samplestats_2l(YLp = YLp, Lp = Lp,
-                  Mu.W = Mu.W, Sigma.W = Sigma.W,
-                  Mu.B = Mu.B, Sigma.B = Sigma.B,
-                  log2pi = FALSE, minus.two = TRUE)
+        if(lavmodel@conditional.x) {
+            loglik <- lav_mvreg_cluster_loglik_samplestats_2l(
+                          YLp = YLp, Lp = Lp,
+                          Res.Sigma.W = Res.Sigma.W,
+                          Res.Int.W = Res.Int.W, Res.Pi.W = Res.Pi.W,
+                          Res.Sigma.B = Res.Sigma.B,
+                          Res.Int.B = Res.Int.B, Res.Pi.B = Res.Pi.B,
+                          log2pi = FALSE, minus.two = TRUE)
+        } else {
+            loglik <- lav_mvnorm_cluster_loglik_samplestats_2l(
+                          YLp = YLp, Lp = Lp,
+                          Mu.W = Mu.W, Sigma.W = Sigma.W,
+                          Mu.B = Mu.B, Sigma.B = Sigma.B,
+                          log2pi = FALSE, minus.two = TRUE)
+        }
     }
 
     # minimize

@@ -126,6 +126,7 @@ lavData <- function(data              = NULL,          # data.frame
                                  cluster           = cluster,
                                  group.label       = group.label,
                                  level.label       = level.label,
+                                 block.label       = block.label,
                                  ov.names          = ov.names,
                                  ordered           = ordered,
                                  sampling.weights  = sampling.weights,
@@ -263,6 +264,18 @@ lavData <- function(data              = NULL,          # data.frame
             }
         }
 
+        # block.labels
+        block.label <- character(0L)
+        if(length(group.label) > 0L) {
+            block.label <- group.label
+        } else if(length(level.label) > 0L) {
+            block.label <- level.label
+        } else if(length(group.label) > 0L &&
+                  length(level.label) > 0L) {
+            block.label <- paste(group.label,
+                                 level.label, sep = ".")
+        }
+
         # construct lavData object
         lavData <- new("lavData",
                        data.type   = "moment",
@@ -272,6 +285,7 @@ lavData <- function(data              = NULL,          # data.frame
                        cluster     = character(0L),
                        group.label = group.label,
                        level.label = character(0L),
+                       block.label = block.label,
                        nobs        = as.list(sample.nobs),
                        norig       = as.list(sample.nobs),
                        ov.names    = ov.names,
@@ -400,6 +414,18 @@ lavData <- function(data              = NULL,          # data.frame
             }
         } # g
 
+        # block.labels
+        block.label <- character(0L)
+        if(length(group.label) > 0L) {
+            block.label <- group.label
+        } else if(length(level.label) > 0L) {
+            block.label <- level.label
+        } else if(length(group.label) > 0L &&
+                  length(level.label) > 0L) {
+            block.label <- paste(group.label,
+                                 level.label, sep = ".")
+        }
+
         # construct lavData object
         lavData <- new("lavData",
                        data.type   = "none",
@@ -409,6 +435,7 @@ lavData <- function(data              = NULL,          # data.frame
                        cluster     = cluster,
                        group.label = group.label,
                        level.label = level.label,
+                       block.label = block.label,
                        nobs        = sample.nobs,
                        norig       = sample.nobs,
                        ov.names    = ov.names,
@@ -438,6 +465,7 @@ lav_data_full <- function(data          = NULL,          # data.frame
                           cluster       = NULL,          # clustered?
                           group.label   = NULL,          # custom group labels?
                           level.label   = NULL,
+                          block.label   = NULL,
                           ov.names      = NULL,          # variables needed
                                                          # in model
                           ordered       = NULL,          # ordered variables
@@ -603,7 +631,7 @@ lav_data_full <- function(data          = NULL,          # data.frame
     for(g in 1:ngroups) {
         # does the data contain all the observed variables
         # needed in the user-specified model for this group
-        ov.all <- unique(ov.names[[g]], ov.names.x[[g]]) # no overlap if categ
+        ov.all <- unique(c(ov.names[[g]], ov.names.x[[g]])) # no overlap if categ
 
         # handle interactions
         ov.int.names <- ov.all[ grepl(":", ov.all) ]
@@ -627,7 +655,7 @@ lav_data_full <- function(data          = NULL,          # data.frame
         idx.missing <- which(!(ov.all %in% names(data)))
 
         if(length(idx.missing)) {
-            stop("lavaan ERROR: missing observed variables in dataset: ",
+            stop("lavaan ERROR: some (observed) variables specified in the model are not found in the dataset: ",
                  paste(ov.all[idx.missing], collapse=" "))
         }
     }
@@ -744,8 +772,9 @@ lav_data_full <- function(data          = NULL,          # data.frame
     for(g in 1:ngroups) {
 
         # extract variables in correct order
-        if(!is.null(cluster) && length(cluster) > 0L) {
+        if(nlevels > 1L) {
             # keep 'joint' (Y,X) matrix in @X if multilevel (or always?)
+            # yes for multilevel (for now); no for clustered only
             OV.NAMES <- unique(c(ov.names[[g]], ov.names.x[[g]]))
             ov.idx  <- ov$idx[match(OV.NAMES,   ov$name)]
         } else {
@@ -833,9 +862,12 @@ lav_data_full <- function(data          = NULL,          # data.frame
         user.ordered.names <- ov$name[ov$type == "ordered" & ov$user == 1L]
         user.ordered.idx <- which(ov.names[[g]] %in% user.ordered.names)
         if(length(user.ordered.idx) > 0L) {
-            for(i in user.ordered.idx) {
+          for(i in user.ordered.idx) {
+                X[[g]][,i][is.na(X[[g]][,i])] <- NA # change NaN to NA
                 X[[g]][,i] <- as.numeric(as.factor(X[[g]][,i]))
-            }
+                # possible alternative to the previous two lines:
+                # X[[g]][,i] <- as.numeric(factor(X[[g]][,i], exclude = c(NA, NaN)))
+          }
         }
 
         ## FIXME:
@@ -1040,8 +1072,12 @@ lav_data_full <- function(data          = NULL,          # data.frame
                     warning("lavaan WARNING: some cases are empty and will be ignored:\n  ", paste(empty.case.idx, collapse=" "))
                 }
             }
-            if(warn && any(Mp[[g]]$coverage < 0.1)) {
-                warning("lavaan WARNING: due to missing values, some pairwise combinations have less than 10% coverage")
+            if(warn && any(Mp[[g]]$coverage == 0)) {
+                txt <- c("due to missing values, some pairwise combinations have 0% coverage;", " use lavInspect(fit, \"coverage\") to investigate.")
+                warning(lav_txt2message(txt))
+            } else if(warn && any(Mp[[g]]$coverage < 0.1)) {
+                txt <- c("due to missing values, some pairwise combinations have less than 10% coverage;", " use lavInspect(fit, \"coverage\") to investigate.")
+                warning(lav_txt2message(txt))
             }
             # in case we had observations with only missings
             nobs[[g]] <- NROW(X[[g]]) - length(Mp[[g]]$empty.idx)
@@ -1076,6 +1112,18 @@ lav_data_full <- function(data          = NULL,          # data.frame
         }
     }
 
+    # block.labels
+    block.label <- character(0L)
+    if(length(group.label) > 0L) {
+        block.label <- group.label
+    } else if(length(level.label) > 0L) {
+        block.label <- level.label
+    } else if(length(group.label) > 0L &&
+              length(level.label) > 0L) {
+        block.label <- paste(group.label,
+                             level.label, sep = ".")
+    }
+
 
     lavData <- new("lavData",
                    data.type       = "full",
@@ -1085,6 +1133,7 @@ lav_data_full <- function(data          = NULL,          # data.frame
                    cluster         = cluster,
                    group.label     = group.label,
                    level.label     = level.label,
+                   block.label     = block.label,
                    std.ov          = std.ov,
                    nobs            = nobs,
                    norig           = norig,

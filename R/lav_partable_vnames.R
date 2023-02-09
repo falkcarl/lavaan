@@ -53,6 +53,7 @@ lav_partable_vnames <- function(partable, type = NULL, ...,
                    "ov.orphan",   # lonely observed intercepts/variances
                    "ov.interaction", # interaction terms (with colon)
                    "ov.efa",      # indicators involved in efa
+
                    "th",          # thresholds ordinal only
                    "th.mean",     # thresholds ordinal + numeric variables
 
@@ -330,6 +331,22 @@ lav_partable_vnames <- function(partable, type = NULL, ...,
             } else {
                 ov.x <- eqs.x[ !eqs.x %in% c(lv.names2, ov.ind, ov.y) ]
             }
+            # new in 0.6-12: if we have interaction terms in ov.x, check
+            # if some terms are in eqs.y; if so, remove the interaction term
+            # from ov.x
+            int.idx <- which(grepl(":", ov.x))
+            bad.idx <- integer(0L)
+            for(iv in int.idx) {
+                NAMES <- strsplit(ov.x[iv], ":", fixed = TRUE)[[1L]]
+                if(any(NAMES %in% eqs.y)) {
+                    bad.idx <- c(bad.idx, iv)
+                }
+            }
+            if(length(bad.idx) > 0L) {
+                ov.y <- unique(c(ov.y, ov.x[bad.idx]))
+                # it may be removed later, but needed to construct ov.names
+                ov.x <- ov.x[-bad.idx]
+            }
         }
 
         # observed variables
@@ -560,6 +577,16 @@ lav_partable_vnames <- function(partable, type = NULL, ...,
                                   # sort(TH)
                                   # NO!, don't do that; t10 will be before t2
                                   # fixed in 0.6-1 (bug report from Myrsini)
+                                  # in 0.6-12, we do this anyway like this:
+
+                                  # get var name
+                                  TH1 <- sapply(strsplit(TH, split = "\\|t"),
+                                                "[[", 1)
+                                  # get number, and sort
+                                  TH2 <- as.character(sort(as.integer(sapply(
+                                      strsplit(TH, split = "\\|t"), "[[", 2))))
+                                  # paste back togehter in the right order
+                                  paste(TH1, TH2, sep = "|t")
                              }))
             } else {
                 out <- character(0L)
@@ -646,6 +673,28 @@ lav_partable_vnames <- function(partable, type = NULL, ...,
 
     } # b
 
+    # new in 0.6-14: if 'da' operator, change order! (for ov.order = "data")
+    if(any(partable$op == "da")) {
+        da.idx <- which(partable$op == "da")
+        ov.names.data <- partable$lhs[da.idx]
+        OUT <- lapply(OUT, function(x) {
+                          for(b in seq_len(length(x))) {
+                              target.idx <- which(x[[b]] %in% ov.names.data)
+                              if(length(target.idx) > 0L) {
+                                  new.ov <-
+                                    ov.names.data[match(x[[b]], ov.names.data)]
+                                  # rm NA's (eg lv's in eqs.y)
+                                  na.idx <- which(is.na(new.ov))
+                                  if(length(na.idx) > 0L) {
+                                      new.ov <- new.ov[-na.idx]
+                                  }
+                                  x[[b]][target.idx] <- new.ov
+                              }
+                          }
+                          x
+                      })
+    }
+
     # to mimic old behaviour, if length(type) == 1L
     if(length(type) == 1L) {
         OUT <- OUT[[type]]
@@ -653,10 +702,10 @@ lav_partable_vnames <- function(partable, type = NULL, ...,
         if(ndotdotdot == 0L) {
             if(type == "lv.marker") {
                 OUT <- unlist(OUT)
-                # no unique, as unique drops attributes, and reduces
+                # no unique(), as unique() drops attributes, and reduces
                 # c("", "", "") to a single ""
                 # (but, say for 2 groups, you get 2 copies)
-                # as this is only for 'display', we leave like that
+                # as this is only for 'display', we leave it like that
             } else {
                 OUT <- unique(unlist(OUT))
             }
