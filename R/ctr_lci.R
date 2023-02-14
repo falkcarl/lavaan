@@ -4,7 +4,7 @@
 ## Requires that the parameter or quantity of interest is clearly labeled in the parameter table 
 lci<-function(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
-              ci.method="NealeMiller1997",
+              ci.method="bisect",
               start=NULL, diff.method="default", Dtol=.05,
               reoptimize=FALSE, start.adj = .25,
               iterlim=50, control=list(), ...){
