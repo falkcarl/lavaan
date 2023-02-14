@@ -428,6 +428,12 @@ lci_bisect<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,bisect.init=q
   sign<-ifelse(bound=="lower",-1,1)
   
   if(!is.null(start)){
+    
+    if(start %in% "standard"){
+      warning("start = standard not implemented with bisect")
+      start<-est+sign*bisect.init*se
+    }
+    
     ## Custom p2
     if((start<est & bound=="upper")|(start>est & bound=="lower")){
       stop("Custom starting value for bisection on wrong side of estimate.") 
