@@ -189,7 +189,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
         
           # Call lci_internal via bisection
           LCI<-lci_internal(fit, label, level, est, ptable, pindx,
-                            crit, b, chat, optimizer, "uniroot",
+                            crit, b, chat, optimizer, "bisect",
                             tmpstart, diff.method, Dtol, iterlim, control, ...)
         }
       }
@@ -325,9 +325,9 @@ lci_internal<-function(object, label, level, est, ptable,
     if(diff.method[1]=="satorra.2000"){
       diff.method<-"default"
     }
-    LCI<-suppressWarnings(lci_uniroot(object,label,level,crit,tol=Dtol*.002,bound=bound,
-                                     diff.method=diff.method,iterlim=iterlim,
-                                     chat=chat,start=start,...))
+    LCI<-suppressWarnings(lci_uniroot(object, label, level, crit, tol=Dtol*.002, bound=bound,
+                                     diff.method=diff.method, iterlim=iterlim,
+                                     chat=chat, start=start, ...))
     if(class(LCI)!="try-error" & any(!is.na(LCI))){
       D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
       attr(D,"mod")<-NULL
@@ -554,7 +554,7 @@ lci_bisect<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,bisect.init=q
   
 }
 
-lci_uniroot<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,init=qnorm((1-level)/2,lower.tail=FALSE),
+lci_uniroot<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,bisect.init=qnorm((1-level)/2,lower.tail=FALSE),
                      bound=c("lower","upper"),diff.method="default",lb=-Inf,ub=Inf,chat=1,start=NULL,...){
 
   ## extract parameter table
@@ -572,23 +572,17 @@ lci_uniroot<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,init=qnorm((
   ## standard error
   se<-ptable$se[pindx[1]]
   
-  # function to minimize: difference for difference test
-  f<-function(x,fitmodel,label,diff.method,chat,crit){
-    D<-lci_diff_test(x,fitmodel,label,diff.method=diff.method,chat=chat)
-    if(is.na(D)){
-      return(.Machine$double.xmax) # ensures that uniroot has something to work with
-    } else{
-      return(D-crit)
-    }
-  }
-  
   ## p0 is at the MLE
+  ## We need to find p2, which is a point at which the difference test is significant
   p0<-est
-  
-  ## Pick another endpoint for boundary
   sign<-ifelse(bound=="lower",-1,1)
   
   if(!is.null(start)){
+    
+    if(start %in% "standard"){
+      warning("start = standard not implemented with uniroot")
+      start<-est+sign*bisect.init*se
+    }
     
     ## Custom p2
     if((start<est & bound=="upper")|(start>est & bound=="lower")){
@@ -597,33 +591,73 @@ lci_uniroot<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,init=qnorm((
     p2<-start
     
   } else {
-    
     ## Guess a starting point for p2 based on point estimate and multiplier w/ se
-    p2<-est+sign*init*se*sqrt(crit)
-    
-    tmp<-f(p2,fitmodel,label,diff.method,chat,crit)
-    count<-1
-    while(!tmp>0 & count < iterlim){
-      init<-init*1.1
-      p2<-est+sign*init*se*sqrt(crit)
-      tmp<-f(p2,fitmodel,label,diff.method,chat,crit)
-      count<-count+1
+    p2<-est+sign*bisect.init*se
+  }
+  
+  ## enforce hard boundaries
+  if(!is.null(lb)){
+    p2[p2<lb]<-lb
+  }
+  if(!is.null(ub)){
+    p2[p2>ub]<-ub
+  }
+  
+  ## Try p2 and troubleshoot as necessary
+  fariter<-0
+  inc1<-0
+  inc2<-ifelse(is.null(start),1,(start-est)/(sign*bisect.init*se))
+  inc3<-ifelse(is.null(start),1.5,1.5*(start-est)/(sign*bisect.init*se))
+  flag<-FALSE
+  while(fariter<iterlim){
+    D2<-lci_diff_test(p2,fitmodel,label,diff.method=diff.method,chat=chat)
+    # A bit of troubleshooting if we end up with an NA value
+    # Assume this means the boundary is too far from the MLE?
+    # If so, actually try doing bisection here to troubleshoot
+    if(is.na(D2)){
+      flag<-TRUE # to indicate that an NA was encountered already
+      inc3<-inc2
+      inc2<-mean(c(inc1,inc3))
+      p2<-est+sign*bisect.init*se*inc2
+    } else if (D2>crit) {
+      break
+    } else if (p2<=lb | p2>=ub){
+      warning("LCI reached upper or lower boundary")
+      # go ahead and return endpoint
+      return(list(est=p2,D=D2,iter=0))
+    } else {
+      # if an NA was encountered before, proceed w/ bisection
+      if(flag){
+        inc1<-inc2
+        inc2<-mean(c(inc1,inc3))
+        p2<-est+sign*bisect.init*se*inc2
+      } else {
+        bisect.init<-bisect.init*1.5 # ad-hoc way of increasing upper boundary
+      }
+      p2<-est+sign*bisect.init*se*inc2
     }
+    
+    if(!is.null(lb)){
+      p2[p2<lb]<-lb
+    }
+    if(!is.null(ub)){
+      p2[p2>ub]<-ub
+    }
+    fariter<-fariter+1
+  }
+  
+  # function to find zero: difference for difference test
+  f<-function(x,fitmodel,label,diff.method,chat,crit){
+    D<-lci_diff_test(x,fitmodel,label,diff.method=diff.method,chat=chat)
+    D-crit
   }
   
   # obtain result using uniroot
   # interval is between p0 and p2
-  result<-try(uniroot(f,c(p0,p2), fitmodel=fitmodel, label=label, diff.method=diff.method,
-                  chat=chat, crit=crit, tol=tol, maxiter=iterlim),silent=TRUE)
+  result<-uniroot(f,c(p0,p2), fitmodel=fitmodel, label=label, diff.method=diff.method,
+                  chat=chat, crit=crit)
   
-  if(class(result)!="try-error"){
-    endpoint<-result$root
-    D<-lci_diff_test(est,fitmodel,label,diff.method=diff.method,chat=chat)
-    iter<-result$iter
-    return(list(est=endpoint,D=D,iter=iter))
-  } else {
-    return(NA)
-  }
+  return(list(est=result$root,D=result$f.root+crit,iter=result$iter,fariter=fariter))
   
 }
 
