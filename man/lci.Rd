@@ -8,8 +8,8 @@ lci(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
               ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
-              reoptimize=FALSE,
-              iterlim=50,control=list())
+              reoptimize=FALSE, start.adj = .25,
+              iterlim=50,control=list(), ...)
 lciProfile(object, label, diff.method="default",grid=NULL)
 }
 \arguments{
@@ -18,13 +18,15 @@ lciProfile(object, label, diff.method="default",grid=NULL)
 \item{level}{Confidence level required (e.g., .95 for 95\% CI).}
 \item{bound}{\code{"lower"} for lower bound, \code{"upper"} for upper bound, or \code{c("lower","upper")} for both.}
 \item{optimizer}{This controls the optimizer used for finding upper and lower bounds, if an algorithm such as a modified version of that by Neale & Miller (1997) is employed. The default \code{"Rsolnp"} employs \code{\link[Rsolnp]{solnp}} to optimize. Other options for choice of optimizer include \code{"\link{optim}"} and \code{"\link{nlminb}"}, but may not consistently yield valid intervals.}
-\item{ci.method}{This option controls the algorithm used to find upper and lower bounds. The current version of this code implements two that have been tested and found to consistently provide valid intervals. \code{"NealeMiller1997"}, the default, corresponds to a modified version of Neale & Miller (1997) as detailed and studied by Falk (in press). \code{"bisect"} employs a bisection algorithm. Other faster or more accurate algorithms are possible (e.g., Wu & Neale, 2012), but have not yet been implemented due in part to difficulty in optimization.}
-\item{start}{ (Experimental). Works only when doing optimization for a single bound (upper or lower; see \code{bound} argument). For \code{ci.method="NealeMiller1997"}, an optional scalar or vector used as starting values for the quantity of interest. Otherwise, point estimates in the fitted model are default. For functions of model parameters and \code{estimator="ML"} or when using \code{diff.method="satorra.2000"}, this should be a vector corresponding to all parameters in the function defined with ":=", and in their order of appearance in the function definition. When \code{ci.method="bisect"}, \code{start} should be a scalar value, and is used as an initial guess for a value of the quantity at which the a chi-square difference test will be significant (i.e., a point beyond the CI boundary to determine where to start the bisection algorithm).}
+\item{ci.method}{This option controls the algorithm used to find upper and lower bounds. The current version of this code implements two that have been tested and found to consistently provide valid intervals. \code{"NealeMiller1997"}, the default, corresponds to a modified version of Neale & Miller (1997) as studied by Falk (2018). \code{"bisect"} employs a bisection algorithm. Other faster or more accurate algorithms are possible (e.g., Wu & Neale, 2012), but have not yet been implemented due in part to difficulty in optimization.}
+\item{start}{ (Experimental). Scalar or vector values work only when doing optimization for a single bound (upper or lower; see \code{bound} argument). For \code{ci.method="NealeMiller1997"}, an optional scalar or vector used as starting values for the quantity of interest. Otherwise, point estimates in the fitted model are default for starting values for the initial model prior to trying to find a boundary. For functions of model parameters and \code{estimator="ML"} or when using \code{diff.method="satorra.2000"}, this should be a vector corresponding to all parameters in the function defined with ":=", and in their order of appearance in the function definition. When \code{ci.method="bisect"}, \code{start} should be a scalar value, and is used as an initial guess for a value of the quantity at which the a chi-square difference test will be significant (i.e., a point beyond the CI boundary to determine where to start the bisection algorithm). If set to \code{"standard"}, the model provided in \code{object} is refit by trying to constrain the quantity of interest to a value that differs from its point estimate by: \code{qnorm((1-level)/2,lower.tail=FALSE)*se} where \code{se} is the estimated standard error.}
 \item{diff.method}{Passed as the \code{"method"} argument to \code{\link{lavTestLRT}} to compute difference tests used to find CI boundaries. If \code{"satorra.2000"} is specified, this function currently uses \code{A.method="exact"}.}
-\item{Dtol}{(Experimental). Tolerance level for difference test; if difference test at a boundary is not within this amount of the critical value, a warning is printed. A future version of this function may attempt re-optimization when \code{ci.method="NealeMiller1997"} or otherwise attempt to diagnose the problem. When \code{ci.method="bisect"}, \code{Dtol*.002} is actually used to determine when to terminate the algorithm.}
+\item{Dtol}{Tolerance level for difference test; if difference test at a boundary is not within this amount of the critical value, a warning is printed and reoptimization is attempted if \code{reoptimize} is set to \code{TRUE}. A future version of this function may attempt re-optimization when \code{ci.method="NealeMiller1997"} or otherwise attempt to diagnose the problem. When \code{ci.method="bisect"}, \code{Dtol*.002} is used to determine when to terminate the algorithm. This smaller tolerance was chosen to hopefully ensure tight convergence.}
+\item{reoptimize}{For use with \code{ci.method="NealeMiller1998"}. If tolerance criterion in Dtol is not met or CI is on wrong side of point estimate, attempts to re-optimize by moving starting values and/or obtain a boundary with better tolerance by using bisection.}
+\item{start.adj}{(Experimental). The default for this option may change. Used if \code{reoptimize=TRUE} and if optimization fails. This is a multiplier that will move starting values by \code{start.adj*se} further to an extreme value.}
 \item{iterlim}{Number of iterations to perform if \code{"bisect"} is used as the estimation algorithm.}
-\item{reoptimize}{(Experimental). For use with \code{ci.method="NealeMiller1998"}. If tolerance criterion in Dtol is not met or CI is on wrong side of point estimate, attempts to re-optimize by moving starting values and/or obtain a boundary with better tolerance by using bisection.}
 \item{control}{An optional list to be passed to optmizers (\code{solnp}, \code{optim}, \code{nlminb}). Note that these options are passed to optimizers that find LCI boundaries and are not further passed to \code{lavaan} for use in optimization of individual models. However, if the initially fitted model specified in \code{object} had such optimization options, these are retained when \code{lavaan} performs model fitting.}
+\item{...}{Additional options passed down to bisection and uniroot. Currently \code{ub} and \code{lb} can be set to scalar values that will enforce hard boundaries on the upper-most and lower-most possible values of the quantity of interest. Optimization with bisection or uniroot generally require that the desired boundary is between two values - usually the point estimate and some extreme value. The algorithm will then find the boundary between these two values. \code{bisect.init} helps determine the extreme value with \code{bisect.init*se} used as an initial try, with \code{bisect.init = qnorm((1-level)/2, lower.tail=FALSE)} as the default to start with. This value may be increased on the fly (by \code{1.5*}) if the extreme-most value is not extreme enough.}
 \item{grid}{An optional vector for use with \code{lciProfile} indicating at what values the parameter (or function of model parameters) should be constrained for the purposes of computing the difference test. If NULL, plus and minus 2 standard deviations from the estimate will be used.}
 }
 \author{Carl F. Falk}
@@ -143,7 +145,17 @@ lines(testSB2010$grid,testSB2010$D,lty=3)
 # Test other optimization tweaks
 
 # optim
+# example of failure
 lci(fit,"l2",optimizer="optim")
+
+# reoptimize and start.adj help, otherwise it has trouble finding one boundary
+lci(fit,"l2",optimizer="optim", reoptimize=TRUE, start.adj=.5)
+
+# or move starting values a little, borrowing info from standard error approximation
+lci(fit,"l2",optimizer="optim", start="standard")
+
+# works also for functions of model parameters
+lci(fit,"lam2",optimizer="optim", start="standard")
 
 # nlminb
 lci(fit,"l2",optimizer="nlminb")
@@ -151,7 +163,14 @@ lci(fit,"l2",optimizer="nlminb")
 # bisection
 lci(fit,"l2",ci.method="bisect")
 
-# Manually change start values for quantity of interest
+# for bisect or uniroot, init*se helps determine most extreme boundary before optimization begins
+lci(fit,"lam2", bound="lower", ci.method="bisect", bisect.init=2)
+
+# testing uniroot instead of bisect
+lci(fit,"lam2", ci.method="uniroot")
+
+# Several ways to manually change start values for quantity of interest below
+# These offer finer control, but less automation than above
 
 # For ci.method="NealeMiller1997" and to help optimization...
 # For the lower boundary pick a point just below the estimate
