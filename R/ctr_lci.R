@@ -108,9 +108,8 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
     }
     
     chat<-lav_test_diff_Satorra2000(object, M0, A.method="exact")$scaling.factor
-    #crit<-chat*crit
-    
-    fit<-lci_refit(object,estimator="ML")
+
+    fit<-lci_refit(object,opt.list=list(estimator="ML",test="default"))
     
   } else {
     chat<-1
@@ -256,6 +255,9 @@ lci_internal<-function(object, label, level, est, ptable,
     }
     
     if(optimizer[1]=="Rsolnp"){
+      if(diff.method[1]=="satorra.2000"){
+        diff.method<-"default"
+      }      
       if(is.null(control$trace)){
         control$trace<-0
       }
@@ -274,6 +276,9 @@ lci_internal<-function(object, label, level, est, ptable,
         D<-NA
       }
     } else if (optimizer[1]=="optim"){
+      if(diff.method[1]=="satorra.2000"){
+        diff.method<-"default"
+      }      
       LCI<-suppressWarnings(try(optim(start, fitfunc, fitmodel=object,
                                       label=label, pindx=pindx, crit=crit, bound=bound,
                                       diff.method=diff.method, chat=chat, control=control, ...)))
@@ -288,6 +293,9 @@ lci_internal<-function(object, label, level, est, ptable,
         D<-NA
       }
     } else if (optimizer[1]=="nlminb"){
+      if(diff.method[1]=="satorra.2000"){
+        diff.method<-"default"
+      }      
       LCI<-suppressWarnings(try(nlminb(start, fitfunc,fitmodel=object,
                                        label=label, pindx=pindx, crit=crit, bound=bound,
                                        diff.method=diff.method,chat=chat,control=control, ...)))
@@ -703,19 +711,7 @@ lciProfile<-function(object,label,diff.method="default",grid=NULL){
 }
 
 # utility function for re-fitting models w/ constraints or different estimator, etc.
-lci_refit<-function(object,const=NULL,estimator=NULL){
-  
-  # extract some info from fitted model
-  #prevmodel<-as.list(object@call)
-  
-  # extract function used to fit model (e.g., cfa,lavaan,etc.)
-  #f<-strsplit(as.character(prevmodel[1]),"::")[[1]]
-  #if(length(f)==1){
-  #  f<-f[1]
-  #} else {
-  #  f<-get(f[2],asNamespace(f[1]))
-  #}
-  #f<-"lavaan"
+lci_refit<-function(object,const=NULL,opt.list=NULL){
   
   # parameter table
   ptab<-parTable(object)
@@ -733,14 +729,14 @@ lci_refit<-function(object,const=NULL,estimator=NULL){
     }
   }
   
-  # change estimator, if desired
-  if(!is.null(estimator)){
-    #prevmodel$estimator<-estimator
-    object@Options$estimator<-estimator
+  # change options, including estimator, if desired
+  if(!is.null(opt.list)){
+    opts <- names(opt.list)
+    for (o in 1:length(opts)){
+      object@Options[opts[o]] <- opt.list[o]
+    }
   }
-  
-  #prevmodel$model<-ptab
-  #object@Model<-ptab
+
   object@ParTable<-as.list(ptab)
 
   M<-lavaan(slotOptions = object@Options,
@@ -748,8 +744,7 @@ lci_refit<-function(object,const=NULL,estimator=NULL){
          slotSampleStats = object@SampleStats,
          slotData = object@Data,
          slotCache = object@Cache)
-  #M<-try(do.call(f,prevmodel[-1]),silent=TRUE)
-  
+
   return(M)
   
 }
