@@ -6,7 +6,7 @@
 \usage{
 lci(object, label, level=.95, bound=c("lower","upper"),
               optimizer="Rsolnp",
-              ci.method="bisect",
+              ci.method="NealeMiller1997",
               start=NULL,diff.method="default",Dtol=.05,
               reoptimize=FALSE, start.adj = .25,
               iterlim=50,control=list(), ...)
