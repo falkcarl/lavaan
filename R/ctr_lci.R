@@ -10,7 +10,7 @@ lci<-function(object, label, level=.95, bound=c("lower","upper"),
               iterlim=50, control=list(), ...){
   
   ## input checking
-  if(class(object)!="lavaan"){
+  if(!inherits(object,"lavaan")){
     stop("Object must be a fitted lavaan model")
   }
   if(!is.null(start)&length(bound)>1){
@@ -265,7 +265,7 @@ lci_internal<-function(object, label, level, est, ptable,
                                               label=label, pindx=pindx, crit=crit, bound=bound,
                                               diff.method=diff.method, chat=chat, control=control, ...)))
       
-      if(class(LCI)!="try-error"){
+      if(!inherits(LCI,"try-error")){
         D<-lci_diff_test(LCI$pars,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
         attr(D,"mod")<-NULL
@@ -282,7 +282,7 @@ lci_internal<-function(object, label, level, est, ptable,
       LCI<-suppressWarnings(try(optim(start, fitfunc, fitmodel=object,
                                       label=label, pindx=pindx, crit=crit, bound=bound,
                                       diff.method=diff.method, chat=chat, control=control, ...)))
-      if(class(LCI)!="try-error"){
+      if(!inherits(LCI,"try-error")){
         D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
         attr(D,"mod")<-NULL
@@ -299,7 +299,7 @@ lci_internal<-function(object, label, level, est, ptable,
       LCI<-suppressWarnings(try(nlminb(start, fitfunc,fitmodel=object,
                                        label=label, pindx=pindx, crit=crit, bound=bound,
                                        diff.method=diff.method,chat=chat,control=control, ...)))
-      if(class(LCI)!="try-error"){
+      if(!inherits(LCI,"try-error")){
         D<-lci_diff_test(LCI$par,object,label,diff.method=diff.method,chat=chat)
         est.bound<-parameterEstimates(attr(D,"mod"))$est[pindx[1]]
         attr(D,"mod")<-NULL
@@ -319,7 +319,7 @@ lci_internal<-function(object, label, level, est, ptable,
     LCI<-suppressWarnings(lci_bisect(object, label, level, crit, tol=Dtol*.002, bound=bound,
                                      diff.method=diff.method, iterlim=iterlim,
                                      chat=chat, start=start, ...))
-    if(class(LCI)!="try-error" & any(!is.na(LCI))){
+    if(!inherits(LCI,"try-error") & any(!is.na(LCI))){
       D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
       attr(D,"mod")<-NULL
       est.bound<-LCI$est
@@ -336,7 +336,7 @@ lci_internal<-function(object, label, level, est, ptable,
     LCI<-suppressWarnings(lci_uniroot(object, label, level, crit, tol=Dtol*.002, bound=bound,
                                      diff.method=diff.method, iterlim=iterlim,
                                      chat=chat, start=start, ...))
-    if(class(LCI)!="try-error" & any(!is.na(LCI))){
+    if(!inherits(LCI,"try-error") & any(!is.na(LCI))){
       D<-lci_diff_test(LCI$est,object,label,diff.method=diff.method,chat=chat)
       attr(D,"mod")<-NULL
       est.bound<-LCI$est
@@ -366,12 +366,12 @@ lci_diff_test<-function(p,fitmodel,label,diff.method="default",chat=1){
   }
   M0<-lci_refit(fitmodel,const)
 
-  if(class(M0)=="try-error"){
+  if(inherits(M0,"try-error")){
     return(NA)
   } else {
     if(M0@Fit@converged){
       D<-try(lavTestLRT(fitmodel,M0,method=diff.method,A.method="exact")$`Chisq diff`[2])
-      if(class(D)!="try-error"){
+      if(!inherits(D,"try-error")){
         D<-D/chat
         attr(D,"mod")<-M0
         return(D)
@@ -671,7 +671,7 @@ lci_uniroot<-function(fitmodel,label,level,crit,tol=1e-5,iterlim=50,bisect.init=
 
 lciProfile<-function(object,label,diff.method="default",grid=NULL){
   
-  if(class(object)!="lavaan"){
+  if(!inherits(object,"lavaan")){
     stop("object must be a fitted lavaan model")
   }
   
@@ -691,7 +691,7 @@ lciProfile<-function(object,label,diff.method="default",grid=NULL){
   if(is.null(grid)){
     est<-ptable$est[pindx][1]
     se<-try(ptable$se[pindx][1])
-    if(object@Options$se=="none"|class(se)=="try-error"|is.na(se))
+    if(object@Options$se=="none"|inherits(se,"try-error")|is.na(se))
       stop("If grid is not specified, standard errors must be available for the fitted model to determine range of x-axis values.")
     grid<-seq(est-se*2,est+se*2,length.out=101)
   }
@@ -701,7 +701,7 @@ lciProfile<-function(object,label,diff.method="default",grid=NULL){
   D<-vector("numeric")
   for(j in 1:length(grid)){
     Dtmp<-try(lci_diff_test(grid[j],object,label,diff.method))
-    if(!is.na(Dtmp)&class(Dtmp)!="try-error"){
+    if(!is.na(Dtmp)& !inherits(Dtmp,"try-error")){
       D<-c(D,Dtmp)
     } else {
       D<-c(D,NA)
