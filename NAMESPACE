@@ -18,7 +18,7 @@ importFrom("stats",
            "dnorm", "lm.fit", "na.omit", "nlminb", "optim", "pchisq",
            "plogis", "pnorm", "qchisq", "qnorm", "quantile", "rnorm", "runif",
            "sd", "terms", "uniroot", "var", "weighted.mean", "aggregate",
-           "dlogis", "qlogis", "optimize", "lm",
+           "dlogis", "qlogis", "optimize", "lm", "setNames",
            # generics
            "coef", "residuals", "resid", "fitted.values", "fitted",
            "predict", "update", "anova", "vcov")
@@ -64,7 +64,7 @@ export("lavaan", "cfa", "sem", "growth",
        "lavResiduals",
        # utilities
        "getCov", "char2num", "cor2cov",
-       "lavOptions",
+       "lavOptions", "lav_use_lavaanC",
 
        "modindices", "modificationIndices", "modificationindices",
        "standardizedSolution", "standardizedsolution",
@@ -86,6 +86,7 @@ export("lavaan", "cfa", "sem", "growth",
        #"lavData",
        "lavPredict",
        "lavPredictY",
+       "lavPredictY_cv",
        "lavCor",
        "lci",
        "lciProfile",
@@ -124,6 +125,8 @@ export("lavaan", "cfa", "sem", "growth",
        "lav_matrix_duplication_ginv_pre_post",
        "lav_matrix_commutation",
        "lav_matrix_commutation_pre",
+       "lav_matrix_commutation_post",
+       "lav_matrix_commutation_pre_post",
        "lav_matrix_commutation_mn_pre",
        "lav_matrix_symmetric_sqrt",
        "lav_matrix_orthogonal_complement",
@@ -166,8 +169,11 @@ export("lavaan", "cfa", "sem", "growth",
        "lav_data_update",
  
        # lav_samplestats
-       "lav_samplestats_from_data"
+       "lav_samplestats_from_data",
 
+       # estimation
+       "lav_export_estimation"
+       
        # deprecated functions
        #"vech", "vech.reverse", "vechru", "vechru.reverse", "lower2full",
        #"vechr", "vechr.reverse", "vechu", "vechu.reverse", "upper2full",
